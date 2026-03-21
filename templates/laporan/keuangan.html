@@ -1,0 +1,669 @@
+{% extends 'layout/layout_vertical.html' %}
+{% load static humanize %}
+{% block title %}Laporan Keuangan - SIMKOS{% endblock title %}
+{% block vendor_css %}{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-bs5/datatables.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-responsive-bs5/responsive.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/datatables-buttons-bs5/buttons.bootstrap5.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/flatpickr/flatpickr.css' %}" />
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+{% endblock vendor_css %}
+{% block vendor_js %}{{ block.super }}
+<script src="{% static 'vendor/libs/datatables-bs5/datatables-bootstrap5.js' %}"></script>
+<script src="{% static 'vendor/libs/flatpickr/flatpickr.js' %}"></script>
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/pdfmake.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.7/vfs_fonts.js"></script>
+<script src="{% static 'js/simkos_export.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div><h4 class="mb-1"><i class="ri-file-chart-line me-2"></i>Laporan Keuangan</h4><p class="text-muted mb-0">Ringkasan pemasukan, pengeluaran & laba bersih</p></div>
+    </div>
+
+    <!-- Filter Card -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="get">
+            <div class="row g-3">
+                <div class="col-md-3"><label class="form-label">Dari Tanggal</label><input type="text" name="start_date" class="form-control flatpickr-input" id="startDate" value="{{ start_date }}" placeholder="Pilih tanggal"></div>
+                <div class="col-md-3"><label class="form-label">Sampai Tanggal</label><input type="text" name="end_date" class="form-control flatpickr-input" id="endDate" value="{{ end_date }}" placeholder="Pilih tanggal"></div>
+                <div class="col-md-3">
+                    <label class="form-label">Tampilkan</label>
+                    <select name="jenis" class="form-select">
+                        <option value="" {% if not jenis_filter %}selected{% endif %}>Semua</option>
+                        <option value="pemasukan" {% if jenis_filter == 'pemasukan' %}selected{% endif %}>Pemasukan Saja</option>
+                        <option value="pengeluaran" {% if jenis_filter == 'pengeluaran' %}selected{% endif %}>Pengeluaran Saja</option>
+                    </select>
+                </div>
+                <div class="col-md-3"></div>
+            </div>
+            <div class="row g-3 mt-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label">Pilih Kolom</label>
+                    <div class="dropdown">
+                        <button class="btn btn-label-secondary dropdown-toggle waves-effect w-100" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside"><i class="ri-layout-column-line me-1"></i>Pilih Kolom yang Ditampilkan</button>
+                        <div class="dropdown-menu p-3" style="min-width: 280px;">
+                            <h6 class="dropdown-header px-0 mb-2">Kolom Pemasukan</h6>
+                            <div class="form-check mb-2"><input class="form-check-input col-pemasukan-cb" type="checkbox" value="0" checked onchange="togglePemasukanCols()"><label class="form-check-label">Tanggal</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pemasukan-cb" type="checkbox" value="1" checked onchange="togglePemasukanCols()"><label class="form-check-label">No. Pembayaran</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pemasukan-cb" type="checkbox" value="2" checked onchange="togglePemasukanCols()"><label class="form-check-label">Penyewa</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pemasukan-cb" type="checkbox" value="3" checked onchange="togglePemasukanCols()"><label class="form-check-label">Metode</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pemasukan-cb" type="checkbox" value="4" checked onchange="togglePemasukanCols()"><label class="form-check-label">Jumlah</label></div>
+                            <div class="dropdown-divider my-2"></div>
+                            <h6 class="dropdown-header px-0 mb-2">Kolom Pengeluaran</h6>
+                            <div class="form-check mb-2"><input class="form-check-input col-pengeluaran-cb" type="checkbox" value="0" checked onchange="togglePengeluaranCols()"><label class="form-check-label">Tanggal</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pengeluaran-cb" type="checkbox" value="1" checked onchange="togglePengeluaranCols()"><label class="form-check-label">Keterangan</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pengeluaran-cb" type="checkbox" value="2" checked onchange="togglePengeluaranCols()"><label class="form-check-label">Kategori</label></div>
+                            <div class="form-check mb-2"><input class="form-check-input col-pengeluaran-cb" type="checkbox" value="3" checked onchange="togglePengeluaranCols()"><label class="form-check-label">Jumlah</label></div>
+                        </div>
+                    </div>
+                    <small class="text-muted d-block mt-1">Klik untuk memilih kolom</small>
+                </div>
+                <div class="col-md-6"></div>
+                <div class="col-md-3"><div class="d-grid gap-2"><button type="submit" class="btn btn-primary"><i class="ri-filter-3-line me-1"></i>Terapkan Filter</button><a href="{% url 'laporan:keuangan' %}" class="btn btn-label-secondary"><i class="ri-refresh-line me-1"></i>Reset</a></div></div>
+            </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row mb-4 g-3">
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Total Pemasukan</p>
+                            <h4 class="mb-0 text-success">Rp {{ total_pemasukan|floatformat:0|intcomma }}</h4>
+                            <small class="text-muted">{{ total_trx_masuk }} transaksi</small>
+                        </div>
+                        <div class="avatar"><span class="avatar-initial rounded bg-label-success"><i class="ri-arrow-up-circle-line ri-24px"></i></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Total Pengeluaran</p>
+                            <h4 class="mb-0 text-danger">Rp {{ total_pengeluaran|floatformat:0|intcomma }}</h4>
+                            <small class="text-muted">{{ total_trx_keluar }} transaksi</small>
+                        </div>
+                        <div class="avatar"><span class="avatar-initial rounded bg-label-danger"><i class="ri-arrow-down-circle-line ri-24px"></i></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Laba Bersih</p>
+                            <h4 class="mb-0 {% if laba_bersih >= 0 %}text-success{% else %}text-danger{% endif %}">Rp {{ laba_bersih|floatformat:0|intcomma }}</h4>
+                            <small class="{% if laba_bersih >= 0 %}text-success{% else %}text-danger{% endif %}">
+                                <i class="{% if laba_bersih >= 0 %}ri-arrow-up-s-line{% else %}ri-arrow-down-s-line{% endif %}"></i>
+                                {{ margin_persen }}% margin
+                            </small>
+                        </div>
+                        <div class="avatar"><span class="avatar-initial rounded {% if laba_bersih >= 0 %}bg-label-success{% else %}bg-label-danger{% endif %}"><i class="ri-funds-line ri-24px"></i></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1">Total Transaksi</p>
+                            <h4 class="mb-0">{{ total_trx_masuk|add:total_trx_keluar }}</h4>
+                            <small class="text-muted">masuk + keluar</small>
+                        </div>
+                        <div class="avatar"><span class="avatar-initial rounded bg-label-primary"><i class="ri-exchange-line ri-24px"></i></span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Chart Pemasukan vs Pengeluaran -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-8">
+            <div class="card h-100">
+                <div class="card-header pb-1">
+                    <h5 class="mb-0"><i class="ri-bar-chart-grouped-line me-2 text-primary"></i>Perbandingan Pemasukan & Pengeluaran</h5>
+                </div>
+                <div class="card-body pt-2">
+                    <div style="position:relative;height:300px"><canvas id="keuanganBarCanvas"></canvas></div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card h-100">
+                <div class="card-header pb-1">
+                    <h5 class="mb-0"><i class="ri-pie-chart-2-line me-2 text-info"></i>Komposisi</h5>
+                </div>
+                <div class="card-body pt-2 d-flex flex-column justify-content-center">
+                    <div id="keuanganPieChart" style="min-height: 280px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Pemasukan -->
+    {% if jenis_filter != 'pengeluaran' %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0"><i class="ri-arrow-up-circle-line me-2 text-success"></i>Rincian Pemasukan</h5>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-label-success btn-sm" onclick="exportTableExcel('tblPemasukan','Rincian_Pemasukan',{4:{{ total_pemasukan|floatformat:0|default:0 }}},'RINGKASAN ({{ total_trx_masuk }} Transaksi Pemasukan)','RINCIAN PEMASUKAN')"><i class="ri-file-excel-2-line me-1"></i>Excel</button>
+                <button class="btn btn-label-danger btn-sm" onclick="exportTablePDF('tblPemasukan','RINCIAN PEMASUKAN',{4:{{ total_pemasukan|floatformat:0|default:0 }}},'RINGKASAN ({{ total_trx_masuk }} Transaksi)')"><i class="ri-file-pdf-line me-1"></i>PDF</button>
+            </div>
+        </div>
+        <div class="card-datatable table-responsive">
+            <table class="table table-hover" id="tblPemasukan">
+                <thead><tr><th>Tanggal</th><th>No. Pembayaran</th><th>Penyewa</th><th>Metode</th><th class="text-end">Jumlah</th></tr></thead>
+                <tbody>
+                    {% for p in pemasukan_list %}
+                    <tr>
+                        <td>{{ p.tanggal_bayar|date:"d/m/Y" }}</td>
+                        <td class="fw-medium">{{ p.nomor_pembayaran }}</td>
+                        <td>{{ p.tagihan.kontrak.penyewa.nama }}</td>
+                        <td><span class="badge bg-label-primary rounded-pill">{{ p.nama_metode_bayar }}</span></td>
+                        <td class="text-end fw-bold text-success">Rp {{ p.jumlah_bayar|floatformat:0|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-footer-summary">
+                    <tr>
+                        <td colspan="4" class="text-start ps-4 py-3"><div class="d-flex align-items-center"><i class="ri-calculator-line me-2 text-primary" style="font-size:1.2rem;"></i><strong>RINGKASAN</strong><small class="text-muted ms-2">{{ total_trx_masuk }} Transaksi</small></div></td>
+                        <td class="text-end py-3"><span class="badge bg-label-success" style="font-size:0.9rem;padding:0.4rem 0.7rem;">Rp {{ total_pemasukan|floatformat:0|intcomma }}</span></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Detail Pengeluaran -->
+    {% if jenis_filter != 'pemasukan' %}
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="mb-0"><i class="ri-arrow-down-circle-line me-2 text-danger"></i>Rincian Pengeluaran</h5>
+            </div>
+            <div class="d-flex gap-2 align-items-center">
+                <button class="btn btn-label-success btn-sm" onclick="exportTableExcel('tblPengeluaran','Rincian_Pengeluaran',{3:{{ total_pengeluaran|floatformat:0|default:0 }}},'RINGKASAN ({{ total_trx_keluar }} Transaksi Pengeluaran)','RINCIAN PENGELUARAN')"><i class="ri-file-excel-2-line me-1"></i>Excel</button>
+                <button class="btn btn-label-danger btn-sm" onclick="exportTablePDF('tblPengeluaran','RINCIAN PENGELUARAN',{3:{{ total_pengeluaran|floatformat:0|default:0 }}},'RINGKASAN ({{ total_trx_keluar }} Transaksi)')"><i class="ri-file-pdf-line me-1"></i>PDF</button>
+            </div>
+        </div>
+        <div class="card-datatable table-responsive">
+            <table class="table table-hover" id="tblPengeluaran">
+                <thead><tr><th>Tanggal</th><th>Keterangan</th><th>Kategori</th><th class="text-end">Jumlah</th></tr></thead>
+                <tbody>
+                    {% for b in pengeluaran_list %}
+                    <tr>
+                        <td>{{ b.tanggal|date:"d/m/Y" }}</td>
+                        <td class="fw-medium">{{ b.deskripsi|truncatewords:8 }}</td>
+                        <td><span class="badge bg-label-warning rounded-pill">{{ b.kategori.nama|default:"-" }}</span></td>
+                        <td class="text-end fw-bold text-danger">Rp {{ b.jumlah|floatformat:0|intcomma }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-footer-summary">
+                    <tr>
+                        <td colspan="3" class="text-start ps-4 py-3"><div class="d-flex align-items-center"><i class="ri-calculator-line me-2 text-primary" style="font-size:1.2rem;"></i><strong>RINGKASAN</strong><small class="text-muted ms-2">{{ total_trx_keluar }} Transaksi</small></div></td>
+                        <td class="text-end py-3"><span class="badge bg-label-danger" style="font-size:0.9rem;padding:0.4rem 0.7rem;">Rp {{ total_pengeluaran|floatformat:0|intcomma }}</span></td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock content %}
+
+{% block page_js %}
+<style>
+    .dataTables_wrapper .dataTables_info { padding: 1rem 1.5rem; font-size: 0.875rem; color: #697a8d; }
+    .dataTables_wrapper .dataTables_paginate { padding: 1rem 1.5rem; }
+    .dataTables_wrapper .dataTables_length, .dataTables_wrapper .dataTables_filter { padding: 0 1.5rem 1rem 1.5rem; }
+    .dataTables_wrapper .dataTables_filter input { border: 1px solid #d9dee3; border-radius: 0.375rem; padding: 0.4375rem 0.875rem; }
+    .dataTables_wrapper .dataTables_length select { border: 1px solid #d9dee3; border-radius: 0.375rem; padding: 0.4375rem 2rem 0.4375rem 0.875rem; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button { padding: 0.438rem 0.875rem; border-radius: 0.375rem; margin: 0 0.125rem; border: none; background: transparent; color: #697a8d; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button.current { background: #696cff !important; color: white !important; border: none; }
+    .dataTables_wrapper .dataTables_paginate .paginate_button:hover:not(.disabled) { background: rgba(105, 108, 255, 0.08) !important; border: none; color: #696cff !important; }
+    .card-datatable { padding-bottom: 0; }
+    #tblPemasukan thead th, #tblPengeluaran thead th { font-weight: 600; font-size: 0.8125rem; text-transform: none; letter-spacing: 0; }
+</style>
+<script>
+var DT_LANG = {
+    "sEmptyTable": "Tidak ada data",
+    "sLengthMenu": "Tampilkan _MENU_ data",
+    "sZeroRecords": "Tidak ditemukan",
+    "sInfo": "Menampilkan _START_ sampai _END_ dari _TOTAL_ data",
+    "sInfoEmpty": "Menampilkan 0 sampai 0 dari 0 data",
+    "sInfoFiltered": "(disaring dari _MAX_ total data)",
+    "sSearch": "Cari:",
+    "oPaginate": { "sFirst": "Pertama", "sPrevious": "Sebelumnya", "sNext": "Selanjutnya", "sLast": "Terakhir" }
+};
+var DT_DOM = '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>><"table-responsive"rt><"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>';
+
+$(document).ready(function() {
+    flatpickr('#startDate', { dateFormat: 'Y-m-d' });
+    flatpickr('#endDate', { dateFormat: 'Y-m-d' });
+
+    // DataTables: Rincian Pemasukan
+    if ($('#tblPemasukan').length) {
+        $('#tblPemasukan').DataTable({
+            language: DT_LANG,
+            order: [[0, 'desc']],
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, 100, -1], ['10', '25', '50', '100', 'Semua']],
+            responsive: false,
+            dom: DT_DOM,
+            initComplete: function () { $('#tblPemasukan_wrapper .dataTables_filter input').attr('placeholder', 'Cari pemasukan...'); }
+        });
+    }
+
+    // DataTables: Rincian Pengeluaran
+    if ($('#tblPengeluaran').length) {
+        $('#tblPengeluaran').DataTable({
+            language: DT_LANG,
+            order: [[0, 'desc']],
+            pageLength: 10,
+            lengthMenu: [[10, 25, 50, 100, -1], ['10', '25', '50', '100', 'Semua']],
+            responsive: false,
+            dom: DT_DOM,
+            initComplete: function () { $('#tblPengeluaran_wrapper .dataTables_filter input').attr('placeholder', 'Cari pengeluaran...'); }
+        });
+    }
+
+    // === Bar Chart: Pemasukan vs Pengeluaran ===
+    var pemasukan = {{ total_pemasukan|floatformat:0|default:"0" }};
+    var pengeluaran = {{ total_pengeluaran|floatformat:0|default:"0" }};
+    var laba = {{ laba_bersih|floatformat:0|default:"0" }};
+
+    if (typeof ApexCharts !== 'undefined') {
+        var isDarkDonut = document.documentElement.classList.contains('dark-style') ||
+                     document.body.classList.contains('dark-style') ||
+                     window.getComputedStyle(document.body).backgroundColor.includes('rgb(35') ||
+                     window.getComputedStyle(document.body).backgroundColor.includes('rgb(40');
+        var cardBgColor = isDarkDonut ? '#283046' : '#fff';
+        var primaryColor = '#7367f0';
+        var successColor = '#28c76f';
+        var dangerColor = '#ea5455';
+        var labelColor = isDarkDonut ? 'rgba(255,255,255,0.6)' : '#6e6b7b';
+        var gridColor = isDarkDonut ? 'rgba(255,255,255,0.1)' : '#ebe9f1';
+
+        // === Bar Chart: Pemasukan vs Pengeluaran (Chart.js - Identik dengan Tren Pendapatan AI Dashboard) ===
+        var isDark = document.documentElement.classList.contains('dark-style') ||
+                     document.body.classList.contains('dark-style') ||
+                     window.getComputedStyle(document.body).backgroundColor.includes('rgb(35') ||
+                     window.getComputedStyle(document.body).backgroundColor.includes('rgb(40');
+        var chartGridColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.08)';
+        var chartTickColor = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.6)';
+
+        var barEl = document.getElementById('keuanganBarCanvas');
+        if (barEl) {
+            new Chart(barEl.getContext('2d'), {
+                type: 'bar',
+                data: {
+                    labels: ['Pemasukan', 'Pengeluaran', 'Laba Bersih'],
+                    datasets: [{
+                        label: 'Jumlah (Rp)',
+                        data: [pemasukan, pengeluaran, laba],
+                        backgroundColor: 'rgba(102, 108, 255, 0.75)',
+                        borderColor: '#666cff',
+                        borderWidth: 1,
+                        borderRadius: 8,
+                        barPercentage: 0.55,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(0,0,0,0.8)',
+                            titleColor: '#fff',
+                            bodyColor: '#fff',
+                            padding: 10,
+                            cornerRadius: 8,
+                            callbacks: {
+                                label: function(ctx) {
+                                    return 'Rp ' + ctx.parsed.y.toLocaleString('id-ID');
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: chartTickColor,
+                                callback: function(val) {
+                                    if (val >= 1000000) return 'Rp ' + (val / 1000000).toFixed(1) + 'Jt';
+                                    if (val >= 1000) return 'Rp ' + (val / 1000).toFixed(0) + 'Rb';
+                                    return 'Rp ' + val;
+                                }
+                            },
+                            grid: { color: chartGridColor }
+                        },
+                        x: {
+                            ticks: { color: chartTickColor },
+                            grid: { display: false }
+                        }
+                    }
+                }
+            });
+        }
+
+        // === Donut Chart: Komposisi (Materialize Style) ===
+        new ApexCharts(document.querySelector("#keuanganPieChart"), {
+            series: [pemasukan, pengeluaran],
+            chart: {
+                type: 'donut',
+                height: 280,
+                fontFamily: '"Inter", sans-serif',
+                parentHeightOffset: 0
+            },
+            labels: ['Pemasukan', 'Pengeluaran'],
+            colors: [successColor, dangerColor],
+            plotOptions: {
+                pie: {
+                    endAngle: 130,
+                    startAngle: -130,
+                    customScale: 0.9,
+                    donut: {
+                        size: '83%',
+                        labels: {
+                            show: true,
+                            name: {
+                                offsetY: 25,
+                                fontSize: '0.9375rem',
+                                fontFamily: 'Inter',
+                                color: labelColor
+                            },
+                            value: {
+                                offsetY: -15,
+                                fontWeight: 500,
+                                fontSize: '1.75rem',
+                                fontFamily: 'Inter',
+                                color: isDarkDonut ? '#d0d2d6' : '#5e5873',
+                                formatter: function(val) { var v = parseFloat(val); if (v >= 1000000) return 'Rp ' + (v / 1000000).toFixed(1) + 'Jt'; if (v >= 1000) return 'Rp ' + (v / 1000).toFixed(0) + 'Rb'; return 'Rp ' + v; }
+                            },
+                            total: {
+                                show: true,
+                                label: 'Total',
+                                fontSize: '0.9375rem',
+                                fontFamily: 'Inter',
+                                color: labelColor,
+                                formatter: function(w) { var t = w.globals.seriesTotals.reduce(function(a,b){return a+b;},0); if (t >= 1000000) return 'Rp ' + (t / 1000000).toFixed(1) + 'Jt'; return 'Rp ' + t.toLocaleString('id-ID'); }
+                            }
+                        }
+                    }
+                }
+            },
+            tooltip: { enabled: false },
+            dataLabels: { enabled: false },
+            stroke: {
+                width: 3,
+                lineCap: 'round',
+                colors: [cardBgColor]
+            },
+            states: {
+                hover: { filter: { type: 'none' } },
+                active: { filter: { type: 'none' } }
+            },
+            legend: {
+                position: 'bottom',
+                fontFamily: 'Inter',
+                fontSize: '15px',
+                markers: { offsetX: -3, height: 10, width: 10 },
+                itemMargin: { horizontal: 24, vertical: 8 },
+                offsetY: -10,
+                labels: { colors: labelColor }
+            },
+            responsive: [{ breakpoint: 480, options: { chart: { height: 240 } } }]
+        }).render();
+    }
+});
+
+// === KONFIGURASI EXPORT LAPORAN KEUANGAN ===
+// Tabel Pemasukan: 0=Tanggal, 1=No.Pembayaran, 2=Penyewa, 3=Metode, 4=Jumlah
+// Tabel Pengeluaran: 0=Tanggal, 1=Keterangan, 2=Kategori, 3=Jumlah
+var EXCEL_INFO = {
+    name: "{{ export_excel_template.header_nama_perusahaan|escapejs|default:'SIMKOS' }}",
+    address: "{{ export_excel_template.header_alamat|escapejs|default:'-' }}",
+    phone: "{{ export_excel_template.header_telepon|escapejs|default:'-' }}",
+    email: "{{ export_excel_template.header_email|escapejs|default:'-' }}",
+    copyright: "{{ export_excel_template.footer_copyright|escapejs|default:'\u00a9 2026 SIMKOS' }}"
+};
+var PDF_INFO = {
+    name: "{{ export_pdf_template.header_nama_perusahaan|escapejs|default:'SIMKOS' }}",
+    address: "{{ export_pdf_template.header_alamat|escapejs|default:'-' }}",
+    phone: "{{ export_pdf_template.header_telepon|escapejs|default:'-' }}",
+    email: "{{ export_pdf_template.header_email|escapejs|default:'-' }}",
+    copyright: "{{ export_pdf_template.footer_copyright|escapejs|default:'\u00a9 2026 SIMKOS' }}"
+};
+
+/**
+ * Export tabel HTML biasa (non-DataTables) ke Excel / PDF menggunakan SimkosExport.
+ * Karena tblPemasukan/tblPengeluaran bukan DataTables, kita baca langsung dari DOM
+ * tapi tetap menggunakan algoritmik ringkasan SimkosExport.
+ */
+function exportTableExcel(tableId, filename, footerData, footerLabel, docTitle) {
+    var t = document.getElementById(tableId);
+    if (!t) { alert('Tabel tidak ditemukan!'); return; }
+
+    // Bangun daftar kolom visible dari thead
+    var visibleCols = [];
+    t.querySelectorAll('thead tr th').forEach(function(th, idx) {
+        if (th.style.display !== 'none' && th.offsetParent !== null) {
+            visibleCols.push({ index: idx, text: th.textContent.trim() });
+        }
+    });
+    var colCount = visibleCols.length;
+    if (colCount === 0) { alert('Tidak ada kolom visible!'); return; }
+
+    var html = '<html xmlns:o="urn:schemas-microsoft-com:office:office"'
+        + ' xmlns:x="urn:schemas-microsoft-com:office:excel"'
+        + ' xmlns="http://www.w3.org/TR/REC-html40"><head><meta charset="utf-8">';
+    html += '<style>table{border-collapse:collapse;table-layout:fixed;width:100%;}th,td{font-family:Arial,sans-serif;font-size:9pt;white-space:normal;word-wrap:break-word;overflow:hidden;}</style></head><body>';
+
+    // Kop surat
+    html += '<table border="0" style="margin-bottom:8px;">';
+    html += '<tr><td colspan="' + colCount + '" style="text-align:center;font-size:14pt;font-weight:bold;color:#5F61E6;border:none;">' + (EXCEL_INFO.name || 'SIMKOS') + '</td></tr>';
+    html += '<tr><td colspan="' + colCount + '" style="text-align:center;font-size:9pt;color:#697A8D;border:none;">' + (EXCEL_INFO.address || '') + '</td></tr>';
+    html += '<tr><td colspan="' + colCount + '" style="text-align:center;font-size:9pt;color:#697A8D;border:none;">Telp: ' + (EXCEL_INFO.phone || '-') + ' | Email: ' + (EXCEL_INFO.email || '-') + '</td></tr>';
+    html += '<tr><td colspan="' + colCount + '" style="border:none;">&nbsp;</td></tr>';
+    html += '</table>';
+    // Judul
+    html += '<table border="0" style="margin-bottom:6px;"><tr><td colspan="' + colCount + '" style="font-size:11pt;font-weight:bold;color:#5F61E6;border:none;">' + (docTitle || filename) + '</td></tr></table>';
+
+    // Tabel data
+    html += '<table border="1" cellpadding="4" style="border-collapse:collapse;">';
+    html += '<thead><tr>';
+    visibleCols.forEach(function(col) {
+        html += '<th style="background-color:#696CFF;color:#FFFFFF;font-weight:bold;padding:5px;">' + col.text + '</th>';
+    });
+    html += '</tr></thead><tbody>';
+
+    // Baris data dari tbody
+    t.querySelectorAll('tbody tr').forEach(function(tr) {
+        var cells = tr.querySelectorAll('td');
+        if (!cells.length || (cells.length === 1 && cells[0].colSpan > 1)) return;
+        html += '<tr>';
+        visibleCols.forEach(function(col) {
+            var td = cells[col.index];
+            var text = td ? td.textContent.trim().replace(/\s+/g, ' ') : '';
+            html += '<td style="padding:3px 5px;border:1px solid #DBDADE;">' + text + '</td>';
+        });
+        html += '</tr>';
+    });
+
+    // Baris ringkasan: gunakan footerData agar total di kolom yang tepat
+    var hasFooter = footerData && Object.keys(footerData).length > 0;
+    // Build summary cells manually sesuai pola SimkosExport
+    var labelPlaced = false;
+    html += '<tr style="background-color:#EEF0FF;font-weight:bold;">';
+    visibleCols.forEach(function(col, ri) {
+        var colIdx = col.index;
+        if (hasFooter && footerData[colIdx] !== undefined && footerData[colIdx] !== '') {
+            var val = parseFloat(String(footerData[colIdx]).replace(/[^\d.-]/g, ''));
+            var fmtVal = isNaN(val) ? String(footerData[colIdx]) : 'Rp ' + val.toLocaleString('id-ID', {minimumFractionDigits:0,maximumFractionDigits:0});
+            html += '<td style="background-color:#EEF0FF;font-weight:bold;color:#4B4EE6;text-align:right;padding:4px 5px;border:1px solid #DBDADE;">' + fmtVal + '</td>';
+        } else {
+            var cellLabel = (!labelPlaced) ? (footerLabel || 'RINGKASAN') : '';
+            if (!labelPlaced && cellLabel) labelPlaced = true;
+            html += '<td style="background-color:#EEF0FF;font-weight:bold;color:#5F61E6;text-align:left;padding:4px 5px;border:1px solid #DBDADE;">' + cellLabel + '</td>';
+        }
+    });
+    html += '</tr>';
+
+    html += '</tbody></table>';
+    html += '<table border="0" style="margin-top:8px;"><tr>';
+    html += '<td style="font-size:8pt;color:#697A8D;border:none;">Dicetak pada: ' + new Date().toLocaleString('id-ID') + '</td>';
+    html += '<td style="font-size:8pt;color:#697A8D;text-align:right;border:none;">' + (EXCEL_INFO.copyright || '') + '</td>';
+    html += '</tr></table></body></html>';
+
+    var b = new Blob(['\uFEFF' + html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+    var l = document.createElement('a');
+    l.href = URL.createObjectURL(b);
+    l.download = filename + '_' + new Date().toISOString().slice(0, 10) + '.xls';
+    document.body.appendChild(l);
+    l.click();
+    document.body.removeChild(l);
+}
+
+function exportTablePDF(tableId, title, footerData, footerLabel) {
+    if (typeof pdfMake === 'undefined') { alert('pdfMake belum dimuat!'); return; }
+    var t = document.getElementById(tableId);
+    if (!t) { alert('Tabel tidak ditemukan!'); return; }
+
+    var visibleCols = [];
+    t.querySelectorAll('thead tr th').forEach(function(th, idx) {
+        if (th.style.display !== 'none' && th.offsetParent !== null) {
+            visibleCols.push({ index: idx, text: th.textContent.trim() });
+        }
+    });
+    if (visibleCols.length === 0) { alert('Tidak ada kolom!'); return; }
+
+    var headers = visibleCols.map(function(col) {
+        return { text: col.text, fillColor: '#696CFF', color: '#FFFFFF', bold: true, alignment: 'center' };
+    });
+    var body = [headers];
+
+    t.querySelectorAll('tbody tr').forEach(function(tr) {
+        var cells = tr.querySelectorAll('td');
+        if (!cells.length || (cells.length === 1 && cells[0].colSpan > 1)) return;
+        var row = [];
+        visibleCols.forEach(function(col) {
+            var td = cells[col.index];
+            var text = td ? td.textContent.trim().replace(/\s+/g, ' ') : '';
+            var isRight = /^Rp[\s\.]/.test(text) || /^[\d.,]+$/.test(text);
+            row.push({ text: text, alignment: isRight ? 'right' : 'left' });
+        });
+        body.push(row);
+    });
+
+    // Baris ringkasan
+    var hasFooter = footerData && Object.keys(footerData).length > 0;
+    var summaryRow = [];
+    var labelPlaced = false;
+    visibleCols.forEach(function(col) {
+        var colIdx = col.index;
+        if (hasFooter && footerData[colIdx] !== undefined && footerData[colIdx] !== '') {
+            var val = parseFloat(String(footerData[colIdx]).replace(/[^\d.-]/g, ''));
+            var fmtVal = isNaN(val) ? String(footerData[colIdx]) : 'Rp ' + val.toLocaleString('id-ID', {minimumFractionDigits:0,maximumFractionDigits:0});
+            summaryRow.push({ text: fmtVal, bold: true, fillColor: '#EEF0FF', color: '#4B4EE6', alignment: 'right' });
+        } else {
+            var cellLabel = (!labelPlaced) ? (footerLabel || 'RINGKASAN') : '';
+            if (!labelPlaced && cellLabel) labelPlaced = true;
+            summaryRow.push({ text: cellLabel, bold: true, fillColor: '#EEF0FF', color: '#5F61E6', alignment: 'left' });
+        }
+    });
+    if (summaryRow.length > 0) body.push(summaryRow);
+
+    var bodyLen = body.length;
+    // Gunakan 'auto' agar pdfMake menghitung lebar kolom otomatis sesuai konten
+    var colWidths = Array(visibleCols.length).fill('auto');
+
+    pdfMake.createPdf({
+        pageOrientation: 'landscape',
+        pageSize: 'A4',
+        pageMargins: [30, 110, 30, 55],
+        header: function(currentPage) {
+            return {
+                margin: [30, 12, 30, 0],
+                table: { widths: ['*', 80], body: [[
+                    { border: [false, false, false, true], stack: [
+                        { text: PDF_INFO.name || 'SIMKOS', fontSize: 13, bold: true, color: '#5F61E6' },
+                        { text: PDF_INFO.address || '', fontSize: 8, color: '#697A8D' },
+                        { text: 'Telp: ' + (PDF_INFO.phone || '-') + ' | Email: ' + (PDF_INFO.email || '-'), fontSize: 8, color: '#697A8D' }
+                    ]},
+                    { border: [false, false, false, true], text: 'Hal. ' + currentPage, fontSize: 8, color: '#697A8D', alignment: 'right' }
+                ]]},
+                layout: { hLineWidth: function(i, n) { return (i === n.table.body.length) ? 1 : 0; }, vLineWidth: function() { return 0; }, hLineColor: function() { return '#696CFF'; }}
+            };
+        },
+        content: [
+            { text: title || 'Laporan', fontSize: 14, bold: true, color: '#5F61E6', margin: [0, 0, 0, 2] },
+            { text: 'Tanggal: ' + new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' }), fontSize: 9, color: '#697A8D', margin: [0, 0, 0, 10] },
+            {
+                table: { headerRows: 1, dontBreakRows: true, widths: colWidths, body: body },
+                layout: {
+                    fillColor: function(r) {
+                        if (r === 0) return '#696CFF';
+                        if (r === bodyLen - 1) return '#EEF0FF';
+                        return (r % 2 === 0) ? '#F5F5F9' : null;
+                    },
+                    hLineWidth: function() { return 0.5; }, vLineWidth: function() { return 0.5; },
+                    hLineColor: function() { return '#DBDADE'; }, vLineColor: function() { return '#DBDADE'; },
+                    paddingLeft: function() { return 4; }, paddingRight: function() { return 4; },
+                    paddingTop: function() { return 3; }, paddingBottom: function() { return 3; }
+                }
+            }
+        ],
+        footer: function(p, c) { return { margin: [30, 8, 30, 0], columns: [{ text: 'Dicetak pada: ' + new Date().toLocaleString('id-ID'), fontSize: 7, color: '#697A8D' }, { text: (PDF_INFO.copyright || '') + '  |  Hal. ' + p + '/' + c, fontSize: 7, color: '#697A8D', alignment: 'right' }] }; },
+        defaultStyle: { fontSize: 8 }
+    }).download((title || filename).replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
+}
+
+// Toggle kolom pemasukan (CSS visibility)
+function togglePemasukanCols() {
+    var tbl = document.getElementById('tblPemasukan');
+    if (!tbl) return;
+    document.querySelectorAll('.col-pemasukan-cb').forEach(function(cb) {
+        var idx = parseInt(cb.value);
+        var show = cb.checked;
+        tbl.querySelectorAll('thead tr > th:nth-child(' + (idx+1) + '), tbody tr > td:nth-child(' + (idx+1) + ')').forEach(function(cell) {
+            cell.style.display = show ? '' : 'none';
+        });
+    });
+}
+// Toggle kolom pengeluaran (CSS visibility)
+function togglePengeluaranCols() {
+    var tbl = document.getElementById('tblPengeluaran');
+    if (!tbl) return;
+    document.querySelectorAll('.col-pengeluaran-cb').forEach(function(cb) {
+        var idx = parseInt(cb.value);
+        var show = cb.checked;
+        tbl.querySelectorAll('thead tr > th:nth-child(' + (idx+1) + '), tbody tr > td:nth-child(' + (idx+1) + ')').forEach(function(cell) {
+            cell.style.display = show ? '' : 'none';
+        });
+    });
+}
+</script>
+{% endblock page_js %}

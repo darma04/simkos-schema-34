@@ -1,0 +1,150 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+   PEMBAYARAN FORM - Form Catat Pembayaran (SIMKOS Style)
+   Layout rapi dengan section headers dan sidebar info
+==========================================================================
+{% endcomment %}
+{% load static humanize %}
+
+{% block title %}{{ title|default:"Catat Pembayaran" }} - SIMKOS{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="py-3 mb-4">
+        <span class="text-muted fw-light">Sewa / Pembayaran /</span> {{ title|default:"Catat Pembayaran" }}
+    </h4>
+
+    <div class="row">
+        <div class="col-xl-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-money-dollar-circle-line me-2 text-primary"></i>Formulir Pembayaran
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+
+                        {% if form.errors %}
+                        <div class="alert alert-danger alert-dismissible" role="alert">
+                            <h6 class="alert-heading mb-1">Error!</h6>
+                            <ul class="mb-0">
+                                {% for field in form %}
+                                    {% for error in field.errors %}
+                                        <li>{{ field.label }}: {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endif %}
+
+                        <!-- Section: Pilih Tagihan -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-bill-line me-1"></i>Pilih Tagihan
+                        </h6>
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="form-floating form-floating-outline">
+                                    {{ form.tagihan }}
+                                    <label for="{{ form.tagihan.id_for_label }}">{{ form.tagihan.label }} <span class="text-danger">*</span></label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Section: Detail Pembayaran -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-money-dollar-circle-line me-1"></i>Detail Pembayaran
+                        </h6>
+                        <div class="row mb-3">
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label" for="{{ form.tanggal_bayar.id_for_label }}">{{ form.tanggal_bayar.label }} <span class="text-danger">*</span></label>
+                                {{ form.tanggal_bayar }}
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label" for="{{ form.jumlah_bayar.id_for_label }}">{{ form.jumlah_bayar.label }} <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text">Rp</span>
+                                    {{ form.jumlah_bayar }}
+                                    <span class="input-group-text">.00</span>
+                                </div>
+                            </div>
+                            <div class="col-md-4 mb-3">
+                                <label class="form-label" for="{{ form.metode_bayar.id_for_label }}">{{ form.metode_bayar.label }}</label>
+                                {{ form.metode_bayar }}
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Section: Bukti & Catatan -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-attachment-line me-1"></i>Bukti & Catatan
+                        </h6>
+                        <div class="row mb-3">
+                            <div class="col-md-6 mb-3">
+                                <label for="{{ form.bukti_bayar.id_for_label }}" class="form-label">{{ form.bukti_bayar.label }}</label>
+                                {{ form.bukti_bayar }}
+                                <small class="text-muted d-block mt-1">Format: JPG, PNG, PDF (maks 5MB)</small>
+                            </div>
+                            <div class="col-md-6 mb-3">
+                                <label class="form-label" for="{{ form.catatan.id_for_label }}">{{ form.catatan.label }}</label>
+                                {{ form.catatan }}
+                            </div>
+                        </div>
+
+                        <div class="mt-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="ri-save-line me-1"></i> Simpan Pembayaran
+                            </button>
+                            <a href="{% url 'sewa:pembayaran_list' %}" class="btn btn-outline-secondary">
+                                <i class="ri-close-line me-1"></i> Batal
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Info -->
+        <div class="col-xl-4">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3">
+                        <i class="ri-information-line me-1 text-primary"></i>Panduan Pengisian
+                    </h6>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-success me-1"></i>
+                            <small>Pilih <strong>Tagihan</strong> yang belum lunas</small>
+                        </li>
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-success me-1"></i>
+                            <small>Isi <strong>Jumlah Bayar</strong> sesuai nominal yang dibayarkan</small>
+                        </li>
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-info me-1"></i>
+                            <small>Pembayaran tidak boleh melebihi sisa tagihan</small>
+                        </li>
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-info me-1"></i>
+                            <small>Status tagihan akan otomatis terupdate (Sebagian/Lunas)</small>
+                        </li>
+                        <li class="mb-0">
+                            <i class="ri-checkbox-circle-line text-info me-1"></i>
+                            <small>Upload <strong>bukti bayar</strong> untuk dokumentasi</small>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}

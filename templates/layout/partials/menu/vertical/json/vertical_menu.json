@@ -1,0 +1,236 @@
+{
+  "menu": [
+    {
+      "url": "dashboard:index",
+      "name": "Dashboard",
+      "icon": "menu-icon tf-icons ri-home-smile-line",
+      "slug": "dashboard"
+    },
+    {
+      "menu_header": "MASTER DATA"
+    },
+    {
+      "name": "Properti",
+      "icon": "menu-icon tf-icons ri-building-2-line",
+      "slug": "properti",
+      "submenu": [
+        {
+          "url": "properti:properti_list",
+          "name": "Daftar Properti",
+          "slug": "properti-list"
+        },
+        {
+          "url": "properti:tipe_kamar_list",
+          "name": "Tipe Kamar",
+          "slug": "properti-tipe-kamar"
+        },
+        {
+          "url": "properti:kamar_list",
+          "name": "Daftar Kamar",
+          "slug": "properti-kamar"
+        }
+      ]
+    },
+    {
+      "url": "penyewa:list",
+      "name": "Penyewa",
+      "icon": "menu-icon tf-icons ri-user-heart-line",
+      "slug": "penyewa"
+    },
+    {
+      "menu_header": "TRANSAKSI"
+    },
+    {
+      "name": "Sewa",
+      "icon": "menu-icon tf-icons ri-file-list-3-line",
+      "slug": "sewa",
+      "submenu": [
+        {
+          "url": "sewa:kontrak_list",
+          "name": "Kontrak Sewa",
+          "slug": "sewa-kontrak"
+        },
+        {
+          "url": "sewa:tagihan_list",
+          "name": "Tagihan Sewa",
+          "slug": "sewa-tagihan"
+        },
+        {
+          "url": "sewa:pembayaran_list",
+          "name": "Pembayaran",
+          "slug": "sewa-pembayaran"
+        }
+      ]
+    },
+    {
+      "name": "Biaya",
+      "icon": "menu-icon tf-icons ri-wallet-line",
+      "slug": "biaya",
+      "submenu": [
+        {
+          "url": "biaya:kategori",
+          "name": "Kategori Biaya",
+          "slug": "biaya-kategori"
+        },
+        {
+          "url": "biaya:transaksi",
+          "name": "Transaksi Biaya",
+          "slug": "biaya-transaksi"
+        }
+      ]
+    },
+    {
+      "name": "Karyawan KOS",
+      "icon": "menu-icon tf-icons ri-team-line",
+      "slug": "hr",
+      "submenu": [
+        {
+          "url": "hr:karyawan",
+          "name": "Daftar Karyawan",
+          "slug": "hr-karyawan"
+        },
+        {
+          "url": "hr:penggajian",
+          "name": "Penggajian",
+          "slug": "hr-penggajian"
+        }
+      ]
+    },
+    {
+      "menu_header": "LAPORAN"
+    },
+    {
+      "name": "Laporan",
+      "icon": "menu-icon tf-icons ri-file-chart-line",
+      "slug": "laporan",
+      "submenu": [
+        {
+          "url": "laporan:pemasukan",
+          "name": "Laporan Pemasukan",
+          "slug": "laporan-pemasukan"
+        },
+        {
+          "url": "laporan:pengeluaran",
+          "name": "Laporan Pengeluaran",
+          "slug": "laporan-pengeluaran"
+        },
+        {
+          "url": "laporan:hunian",
+          "name": "Laporan Hunian",
+          "slug": "laporan-hunian"
+        },
+        {
+          "url": "laporan:keuangan",
+          "name": "Laporan Keuangan",
+          "slug": "laporan-keuangan"
+        }
+      ]
+    },
+    {
+      "menu_header": "AUTOMASI"
+    },
+    {
+      "name": "Telegram",
+      "icon": "menu-icon tf-icons ri-telegram-line",
+      "slug": "automation",
+      "submenu": [
+        {
+          "url": "automation:pengaturan_telegram",
+          "name": "Pengaturan Bot",
+          "slug": "automation-pengaturan"
+        },
+        {
+          "url": "automation:template_pesan_list",
+          "name": "Template Pesan",
+          "slug": "automation-template"
+        },
+        {
+          "url": "automation:log_notifikasi",
+          "name": "Log Notifikasi",
+          "slug": "automation-log"
+        }
+      ]
+    },
+    {
+      "name": "AI Assistant",
+      "icon": "menu-icon tf-icons ri-robot-2-line",
+      "slug": "ai",
+      "submenu": [
+        {
+          "url": "ai_assistant:dashboard",
+          "name": "Dashboard AI",
+          "slug": "ai-dashboard"
+        },
+        {
+          "url": "ai_assistant:index",
+          "name": "Pengaturan AI",
+          "slug": "ai-settings"
+        }
+      ]
+    },
+    {
+      "menu_header": "PENGATURAN"
+    },
+    {
+      "url": "user_management:index",
+      "name": "Manajemen User",
+      "icon": "menu-icon tf-icons ri-user-settings-line",
+      "slug": "users"
+    },
+    {
+      "name": "Access Control",
+      "icon": "menu-icon tf-icons ri-shield-user-line",
+      "slug": "access-control",
+      "submenu": [
+        {
+          "url": "permission_management:role_list",
+          "name": "Roles",
+          "slug": "access-roles"
+        },
+        {
+          "url": "permission_management:permission_list",
+          "name": "Permissions",
+          "slug": "access-permissions"
+        }
+      ]
+    },
+    {
+      "url": "activity_log:index",
+      "name": "Log Aktivitas",
+      "icon": "menu-icon tf-icons ri-history-line",
+      "slug": "activity-log"
+    },
+    {
+      "name": "Pengaturan",
+      "icon": "menu-icon tf-icons ri-settings-3-line",
+      "slug": "pengaturan",
+      "submenu": [
+        {
+          "url": "pengaturan:profil",
+          "name": "Profil Saya",
+          "slug": "pengaturan-profil"
+        },
+        {
+          "url": "pengaturan:perusahaan",
+          "name": "Pengaturan Perusahaan",
+          "slug": "pengaturan-perusahaan"
+        },
+        {
+          "url": "pengaturan:template_cetak_list",
+          "name": "Template Cetak",
+          "slug": "pengaturan-template-cetak"
+        },
+        {
+          "url": "pengaturan:metode_pembayaran_list",
+          "name": "Metode Pembayaran",
+          "slug": "pengaturan-metode-pembayaran"
+        },
+        {
+          "url": "pengaturan:manajemen_data",
+          "name": "Manajemen Data",
+          "slug": "pengaturan-manajemen-data"
+        }
+      ]
+    }
+  ]
+}

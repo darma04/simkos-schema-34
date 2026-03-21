@@ -1,0 +1,653 @@
+{% extends 'layout/layout_vertical.html' %}
+{% load static humanize %}
+{% block title %}Dashboard - SIMKOS{% endblock title %}
+
+{% block vendor_css %}
+{{ block.super }}
+<link rel="stylesheet" href="{% static 'vendor/libs/apex-charts/apex-charts.css' %}" />
+{% endblock vendor_css %}
+
+{% block vendor_js %}
+{{ block.super }}
+<script src="{% static 'vendor/libs/apex-charts/apexcharts.js' %}"></script>
+{% endblock vendor_js %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <!-- Header -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="ri-home-smile-line me-2 text-primary"></i>Dashboard SIMKOS</h4>
+            <p class="text-muted mb-0">Selamat datang, <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>! Periode: {{ bulan_ini }}</p>
+        </div>
+        <div class="d-flex gap-2">
+            <a href="{% url 'properti:properti_list' %}" class="btn btn-label-primary"><i class="ri-building-2-line me-1"></i>Properti</a>
+            <a href="{% url 'penyewa:list' %}" class="btn btn-label-info"><i class="ri-user-heart-line me-1"></i>Penyewa</a>
+        </div>
+    </div>
+
+    <!-- Kartu Statistik Utama -->
+    <div class="row g-3 mb-4">
+        <!-- Total Properti -->
+        <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Total Properti</p>
+                            <h3 class="mb-0">{{ total_properti }}</h3>
+                            <small class="text-muted">Unit Aktif</small>
+                        </div>
+                        <div class="avatar">
+                            <span class="avatar-initial rounded-circle bg-label-primary">
+                                <i class="ri-building-2-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Penyewa Aktif -->
+        <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Penyewa Aktif</p>
+                            <h3 class="mb-0">{{ total_penyewa }}</h3>
+                            <small class="text-muted">dari {{ total_penyewa_semua|default:"0" }} total</small>
+                        </div>
+                        <div class="avatar">
+                            <span class="avatar-initial rounded-circle bg-label-success">
+                                <i class="ri-user-heart-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kontrak Aktif -->
+        <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Kontrak Aktif</p>
+                            <h3 class="mb-0">{{ kontrak_aktif }}</h3>
+                            <small class="text-muted">Kontrak Berjalan</small>
+                        </div>
+                        <div class="avatar">
+                            <span class="avatar-initial rounded-circle bg-label-info">
+                                <i class="ri-file-list-3-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tagihan Pending -->
+        <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Tagihan Pending</p>
+                            <h3 class="mb-0">{{ tagihan_pending }}</h3>
+                            <small class="text-muted">Rp {{ total_tagihan_pending|floatformat:0|intcomma }}</small>
+                        </div>
+                        <div class="avatar">
+                            <span class="avatar-initial rounded-circle bg-label-warning">
+                                <i class="ri-bill-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Keuangan Cards -->
+    <div class="row g-3 mb-4">
+        <!-- Pemasukan -->
+        <div class="col-6 col-xl-4 col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Pemasukan {{ label_periode }}</p>
+                            <h3 class="mb-1">Rp {{ pemasukan_bulan_ini|floatformat:0|intcomma }}</h3>
+                            <small class="text-muted"><i class="ri-arrow-up-line"></i> Dari Pembayaran Sewa</small>
+                        </div>
+                        <div class="avatar avatar-lg">
+                            <span class="avatar-initial rounded-circle bg-label-success">
+                                <i class="ri-money-dollar-circle-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pengeluaran -->
+        <div class="col-6 col-xl-4 col-md-6">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Pengeluaran {{ label_periode }}</p>
+                            <h3 class="mb-1">Rp {{ pengeluaran_bulan_ini|floatformat:0|intcomma }}</h3>
+                            <small class="text-muted"><i class="ri-arrow-down-line"></i> Biaya Operasional</small>
+                        </div>
+                        <div class="avatar avatar-lg">
+                            <span class="avatar-initial rounded-circle bg-label-danger">
+                                <i class="ri-wallet-3-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tingkat Hunian -->
+        <div class="col-xl-4 col-md-12">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-3">
+                        <div>
+                            <p class="text-muted mb-1 fw-medium">Tingkat Hunian</p>
+                            <h3 class="mb-0">{{ tingkat_hunian }}%</h3>
+                        </div>
+                        <div class="avatar">
+                            <span class="avatar-initial rounded-circle bg-label-primary">
+                                <i class="ri-home-heart-line ri-24px"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="progress mb-3" style="height: 12px; border-radius: 6px;">
+                        <div class="progress-bar bg-success" style="width: {{ tingkat_hunian }}%; border-radius: 6px;" role="progressbar"></div>
+                    </div>
+                    <div class="d-flex justify-content-between flex-wrap gap-1">
+                        <span class="badge bg-label-success rounded-pill"><i class="ri-checkbox-blank-circle-fill me-1" style="font-size:8px;"></i>{{ kamar_tersedia }} Kosong</span>
+                        <span class="badge bg-label-primary rounded-pill"><i class="ri-checkbox-blank-circle-fill me-1" style="font-size:8px;"></i>{{ kamar_terisi }} Terisi</span>
+                        <span class="badge bg-label-danger rounded-pill"><i class="ri-checkbox-blank-circle-fill me-1" style="font-size:8px;"></i>{{ kamar_maintenance }} Perbaikan</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Charts Row -->
+    <div class="row g-3 mb-4">
+        <!-- Grafik Pemasukan & Pengeluaran -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center pb-1">
+                    <div>
+                        <h5 class="mb-0"><i class="ri-line-chart-line me-2 text-primary"></i>Pemasukan & Pengeluaran</h5>
+                        <small class="text-muted">{% if is_filtered %}Periode: {{ bulan_ini }}{% else %}6 Bulan Terakhir{% endif %}</small>
+                    </div>
+                </div>
+                <div class="card-body pt-2">
+                    <div id="revenueChart" style="min-height: 320px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Grafik Status Kamar -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card h-100">
+                <div class="card-header pb-1">
+                    <h5 class="mb-0"><i class="ri-pie-chart-2-line me-2 text-info"></i>Status Kamar</h5>
+                    <small class="text-muted">Distribusi {{ total_kamar }} Kamar</small>
+                </div>
+                <div class="card-body pt-2 d-flex flex-column justify-content-center">
+                    <div id="roomStatusChart" style="min-height: 250px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Grafik Tagihan + Tabel Tagihan Belum Bayar -->
+    <div class="row g-3 mb-4">
+        <!-- Grafik Status Tagihan -->
+        <div class="col-xl-4 col-lg-5">
+            <div class="card h-100">
+                <div class="card-header pb-1">
+                    <h5 class="mb-0"><i class="ri-bar-chart-2-line me-2 text-warning"></i>Status Tagihan</h5>
+                    <small class="text-muted">Rekap Seluruh Tagihan</small>
+                </div>
+                <div class="card-body pt-2 d-flex flex-column justify-content-center">
+                    <div id="invoiceStatusChart" style="min-height: 280px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tabel Tagihan Belum Bayar -->
+        <div class="col-xl-8 col-lg-7">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0"><i class="ri-bill-line me-2 text-warning"></i>Tagihan Belum Bayar</h5>
+                        <small class="text-muted">Tagihan yang perlu segera dibayar</small>
+                    </div>
+                    <a href="{% url 'sewa:tagihan_list' %}" class="btn btn-sm btn-label-primary rounded-pill">
+                        <i class="ri-arrow-right-line me-1"></i>Lihat Semua
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Penyewa</th>
+                                <th>Jumlah</th>
+                                <th>Jatuh Tempo</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for t in tagihan_terbaru %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar avatar-sm me-2">
+                                            <span class="avatar-initial rounded-circle bg-label-primary">
+                                                {{ t.kontrak.penyewa.nama|first }}
+                                            </span>
+                                        </div>
+                                        <span class="fw-medium">{{ t.kontrak.penyewa.nama }}</span>
+                                    </div>
+                                </td>
+                                <td><span class="fw-medium">Rp {{ t.jumlah|floatformat:0|intcomma }}</span></td>
+                                <td>{{ t.tanggal_jatuh_tempo|date:"d M Y" }}</td>
+                                <td>
+                                    {% if t.status == 'terlambat' %}
+                                        <span class="badge bg-label-danger rounded-pill"><i class="ri-error-warning-line me-1"></i>Terlambat</span>
+                                    {% else %}
+                                        <span class="badge bg-label-warning rounded-pill"><i class="ri-time-line me-1"></i>Belum Bayar</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    <i class="ri-check-double-line ri-2x d-block mb-2 text-success"></i>
+                                    Semua tagihan sudah lunas! 🎉
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pembayaran Terbaru + Kontrak Akan Habis -->
+    <div class="row g-3 mb-4">
+        <!-- Pembayaran Terbaru -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0"><i class="ri-money-dollar-circle-line me-2 text-success"></i>Pembayaran Terbaru</h5>
+                        <small class="text-muted">{% if is_filtered %}Periode: {{ bulan_ini }}{% else %}5 Pembayaran terakhir{% endif %}</small>
+                    </div>
+                    <a href="{% url 'sewa:pembayaran_list' %}" class="btn btn-sm btn-label-success rounded-pill">
+                        <i class="ri-arrow-right-line me-1"></i>Lihat Semua
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Penyewa</th>
+                                <th>Jumlah</th>
+                                <th>Tanggal</th>
+                                <th>Metode</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for b in pembayaran_terbaru %}
+                            <tr>
+                                <td>
+                                    <div class="d-flex align-items-center">
+                                        <div class="avatar avatar-sm me-2">
+                                            <span class="avatar-initial rounded-circle bg-label-success">
+                                                {{ b.tagihan.kontrak.penyewa.nama|first }}
+                                            </span>
+                                        </div>
+                                        <span class="fw-medium">{{ b.tagihan.kontrak.penyewa.nama }}</span>
+                                    </div>
+                                </td>
+                                <td><span class="text-success fw-medium">Rp {{ b.jumlah_bayar|floatformat:0|intcomma }}</span></td>
+                                <td>{{ b.tanggal_bayar|date:"d M Y" }}</td>
+                                <td><span class="badge bg-label-info rounded-pill">{{ b.nama_metode_bayar }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    <i class="ri-inbox-line ri-2x d-block mb-2"></i>
+                                    Belum ada pembayaran tercatat
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kontrak Akan Habis -->
+        <div class="col-xl-6 col-lg-6">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <div>
+                        <h5 class="mb-0"><i class="ri-alarm-warning-line me-2 text-danger"></i>Kontrak Akan Berakhir</h5>
+                        <small class="text-muted">Dalam 30 hari ke depan</small>
+                    </div>
+                    <a href="{% url 'sewa:kontrak_list' %}" class="btn btn-sm btn-label-danger rounded-pill">
+                        <i class="ri-arrow-right-line me-1"></i>Lihat Semua
+                    </a>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-hover mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>No. Kontrak</th>
+                                <th>Penyewa</th>
+                                <th>Kamar</th>
+                                <th>Tgl Keluar</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for k in kontrak_akan_habis %}
+                            <tr>
+                                <td><a href="{% url 'sewa:kontrak_detail' k.pk %}" class="text-primary fw-medium">{{ k.nomor_kontrak }}</a></td>
+                                <td>{{ k.penyewa.nama }}</td>
+                                <td><span class="badge bg-label-secondary rounded-pill">{{ k.kamar }}</span></td>
+                                <td><span class="text-danger fw-medium">{{ k.tanggal_keluar|date:"d M Y" }}</span></td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="4" class="text-center py-4 text-muted">
+                                    <i class="ri-check-double-line ri-2x d-block mb-2 text-success"></i>
+                                    Tidak ada kontrak yang akan berakhir
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+{% endblock content %}
+
+{% block page_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // === Materialize-style Color Palette ===
+    var isDark = document.documentElement.classList.contains('dark-style') ||
+                 document.body.classList.contains('dark-style') ||
+                 window.getComputedStyle(document.body).backgroundColor.includes('rgb(35') ||
+                 window.getComputedStyle(document.body).backgroundColor.includes('rgb(40');
+    var cardBgColor = isDark ? '#283046' : '#fff';
+    var primaryColor = '#7367f0';
+    var successColor = '#28c76f';
+    var dangerColor = '#ea5455';
+    var warningColor = '#ff9f43';
+    var infoColor = '#00cfe8';
+    var labelColor = isDark ? 'rgba(255,255,255,0.6)' : '#6e6b7b';
+    var gridColor = isDark ? 'rgba(255,255,255,0.1)' : '#ebe9f1';
+
+    // === 1. Pemasukan & Pengeluaran — Dynamic Chart ===
+    var chartType = '{{ chart_type|default:"area" }}';
+    var revenueOptions = {
+        series: [{
+            name: 'Pemasukan',
+            data: {{ chart_pemasukan|safe }}
+        }, {
+            name: 'Pengeluaran',
+            data: {{ chart_pengeluaran|safe }}
+        }],
+        chart: {
+            type: chartType,
+            height: 320,
+            fontFamily: '"Inter", sans-serif',
+            toolbar: { show: false },
+            zoom: { enabled: false },
+            parentHeightOffset: 0,
+            dropShadow: {
+                enabled: true,
+                top: 14,
+                left: 2,
+                blur: 3,
+                opacity: 0.1,
+                color: [successColor, dangerColor]
+            }
+        },
+        colors: [successColor, dangerColor],
+        dataLabels: { enabled: false },
+        stroke: { curve: 'smooth', width: 3, lineCap: 'round' },
+        fill: {
+            type: 'gradient',
+            gradient: {
+                shadeIntensity: 0.8,
+                opacityFrom: 0.44,
+                opacityTo: 0.05,
+                stops: [0, 85, 100]
+            }
+        },
+        markers: {
+            size: 0,
+            strokeWidth: 3,
+            strokeColors: '#fff',
+            hover: { size: 7 }
+        },
+        xaxis: {
+            categories: {{ chart_labels|safe }},
+            axisBorder: { show: false },
+            axisTicks: { show: false },
+            labels: { style: { fontSize: '12px', colors: labelColor } }
+        },
+        yaxis: {
+            labels: {
+                offsetX: -10,
+                formatter: function(val) {
+                    if (val >= 1000000) return 'Rp ' + (val / 1000000).toFixed(1) + 'Jt';
+                    if (val >= 1000) return 'Rp ' + (val / 1000).toFixed(0) + 'Rb';
+                    return 'Rp ' + val;
+                },
+                style: { fontSize: '12px', colors: labelColor }
+            }
+        },
+        tooltip: {
+            shared: true,
+            intersect: false,
+            y: {
+                formatter: function(val) {
+                    return 'Rp ' + val.toLocaleString('id-ID');
+                }
+            }
+        },
+        legend: {
+            position: 'top',
+            horizontalAlign: 'left',
+            fontSize: '13px',
+            fontWeight: 500,
+            labels: { colors: labelColor },
+            markers: { offsetX: -3 },
+            itemMargin: { horizontal: 12 }
+        },
+        grid: {
+            borderColor: gridColor,
+            strokeDashArray: 6,
+            padding: { left: 0, right: 0, top: -10 },
+            xaxis: { lines: { show: false } }
+        }
+    };
+
+    var revenueChart = new ApexCharts(document.querySelector("#revenueChart"), revenueOptions);
+    revenueChart.render();
+
+    // === 2. Status Kamar — Donut Chart (Materialize Component Style) ===
+    var roomOptions = {
+        series: {{ chart_kamar_data|safe }},
+        chart: {
+            type: 'donut',
+            height: 280,
+            fontFamily: '"Inter", sans-serif',
+            parentHeightOffset: 0
+        },
+        labels: {{ chart_kamar_labels|safe }},
+        colors: [successColor, primaryColor, dangerColor],
+        plotOptions: {
+            pie: {
+                endAngle: 130,
+                startAngle: -130,
+                customScale: 0.9,
+                donut: {
+                    size: '83%',
+                    labels: {
+                        show: true,
+                        name: {
+                            offsetY: 25,
+                            fontSize: '0.9375rem',
+                            fontFamily: 'Inter',
+                            color: labelColor
+                        },
+                        value: {
+                            offsetY: -15,
+                            fontWeight: 500,
+                            fontSize: '1.75rem',
+                            fontFamily: 'Inter',
+                            color: isDark ? '#d0d2d6' : '#5e5873',
+                            formatter: function(val) { return val; }
+                        },
+                        total: {
+                            show: true,
+                            label: 'Total Kamar',
+                            fontSize: '0.9375rem',
+                            fontFamily: 'Inter',
+                            color: labelColor,
+                            formatter: function(w) {
+                                return w.globals.seriesTotals.reduce(function(a, b) { return a + b; }, 0);
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        tooltip: { enabled: false },
+        dataLabels: { enabled: false },
+        stroke: {
+            width: 3,
+            lineCap: 'round',
+            colors: [cardBgColor]
+        },
+        states: {
+            hover: { filter: { type: 'none' } },
+            active: { filter: { type: 'none' } }
+        },
+        legend: {
+            position: 'bottom',
+            fontFamily: 'Inter',
+            fontSize: '15px',
+            markers: { offsetX: -3, height: 10, width: 10 },
+            itemMargin: { horizontal: 24, vertical: 8 },
+            offsetY: -10,
+            labels: { colors: labelColor }
+        },
+        responsive: [{
+            breakpoint: 480,
+            options: { chart: { height: 240 } }
+        }]
+    };
+
+    var roomChart = new ApexCharts(document.querySelector("#roomStatusChart"), roomOptions);
+    roomChart.render();
+
+    // === 3. Status Tagihan — Donut Chart (Materialize Component Style) ===
+    var invoiceOptions = {
+        series: {{ chart_tagihan_data|safe }},
+        chart: {
+            type: 'donut',
+            height: 280,
+            fontFamily: '"Inter", sans-serif',
+            parentHeightOffset: 0
+        },
+        labels: {{ chart_tagihan_labels|safe }},
+        colors: [warningColor, infoColor, successColor, dangerColor],
+        plotOptions: {
+            pie: {
+                endAngle: 130,
+                startAngle: -130,
+                customScale: 0.9,
+                donut: {
+                    size: '83%',
+                    labels: {
+                        show: true,
+                        name: {
+                            offsetY: 25,
+                            fontSize: '0.9375rem',
+                            fontFamily: 'Inter',
+                            color: labelColor
+                        },
+                        value: {
+                            offsetY: -15,
+                            fontWeight: 500,
+                            fontSize: '1.75rem',
+                            fontFamily: 'Inter',
+                            color: isDark ? '#d0d2d6' : '#5e5873',
+                            formatter: function(val) { return val; }
+                        },
+                        total: {
+                            show: true,
+                            label: 'Total Tagihan',
+                            fontSize: '0.9375rem',
+                            fontFamily: 'Inter',
+                            color: labelColor,
+                            formatter: function(w) {
+                                return w.globals.seriesTotals.reduce(function(a, b) { return a + b; }, 0);
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        tooltip: { enabled: false },
+        dataLabels: { enabled: false },
+        stroke: {
+            width: 3,
+            lineCap: 'round',
+            colors: [cardBgColor]
+        },
+        states: {
+            hover: { filter: { type: 'none' } },
+            active: { filter: { type: 'none' } }
+        },
+        legend: {
+            position: 'bottom',
+            fontFamily: 'Inter',
+            fontSize: '15px',
+            markers: { offsetX: -3, height: 10, width: 10 },
+            itemMargin: { horizontal: 24, vertical: 8 },
+            offsetY: -10,
+            labels: { colors: labelColor }
+        },
+        responsive: [{
+            breakpoint: 480,
+            options: { chart: { height: 240 } }
+        }]
+    };
+
+    var invoiceChart = new ApexCharts(document.querySelector("#invoiceStatusChart"), invoiceOptions);
+    invoiceChart.render();
+});
+</script>
+{% endblock page_js %}

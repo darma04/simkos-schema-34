@@ -1,0 +1,944 @@
+"""
+==========================================================================
+PENGATURAN VIEWS - Settings/Konfigurasi Sistem SIMKOS
+==========================================================================
+ProfilView        → Edit profil pengguna
+PerusahaanView    → Pengaturan perusahaan + sistem
+TemplateCetak     → Konfigurasi cetak dokumen
+ManajemenData     → Statistik DB, backup, restore, reset
+==========================================================================
+"""
+import os
+import json
+import tempfile
+from datetime import datetime
+
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.views.generic import TemplateView, ListView, CreateView, UpdateView, DeleteView, DetailView
+from django.utils.decorators import method_decorator
+from django.urls import reverse_lazy
+from django.contrib import messages
+from django.http import JsonResponse, HttpResponse
+from django.contrib.auth import get_user_model
+from django.core.management import call_command
+from django.conf import settings
+from django.views.decorators.http import require_POST
+
+from web_project import TemplateLayout
+from .models import TemplateCetak, PengaturanPerusahaan, BackupHistory, MetodePembayaran
+from apps.core.mixins import ReadPermissionMixin, CreatePermissionMixin, UpdatePermissionMixin, DeletePermissionMixin
+from apps.core.permissions import has_permission
+from django.db import transaction
+
+User = get_user_model()
+
+
+class ProfilView(ReadPermissionMixin, TemplateView):
+    """Edit Profil User."""
+    template_name = 'pengaturan/profil.html'
+    permission_module = 'pengaturan'
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        user = self.request.user
+        context['user'] = user
+        if not hasattr(user, 'profile'):
+            from auth.models import Profile
+            Profile.objects.create(user=user, email=user.email)
+        context['profile'] = user.profile
+        return context
+
+
+    def post(self, request, *args, **kwargs):
+
+
+        user = request.user
+        user.first_name = request.POST.get('first_name', '')
+        user.last_name = request.POST.get('last_name', '')
+        user.email = request.POST.get('email', '')
+        user.save()
+        profile = user.profile
+        profile.phone = request.POST.get('phone', '')
+        if 'avatar' in request.FILES:
+            profile.avatar = request.FILES['avatar']
+        if request.POST.get('remove_avatar') == '1':
+            if profile.avatar:
+                profile.avatar.delete(save=False)
+                profile.avatar = None
+        profile.save()
+        messages.success(request, 'Profil berhasil diperbarui!')
+        return redirect('pengaturan:profil')
+
+
+class PerusahaanView(UpdatePermissionMixin, UpdateView):
+    """Pengaturan Perusahaan (singleton)."""
+    model = PengaturanPerusahaan
+    template_name = 'pengaturan/perusahaan.html'
+    permission_module = 'pengaturan'
+    fields = [
+        'nama_perusahaan', 'logo', 'alamat', 'telepon', 'email', 'website', 'pajak_default',
+        'system_title', 'system_description', 'system_keywords', 'system_logo', 'system_favicon',
+        'maintenance_mode', 'maintenance_message',
+        'email_smtp_host', 'email_smtp_port', 'email_smtp_user', 'email_smtp_password', 'email_use_tls',
+        'email_header', 'email_footer',
+        'forgot_password_subject', 'forgot_password_message',
+        'register_subject', 'register_message'
+    ]
+    success_url = reverse_lazy('pengaturan:perusahaan')
+
+    def get_object(self):
+        return PengaturanPerusahaan.load()
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        return context
+
+
+    def form_valid(self, form):
+
+        from django.core.cache import cache
+        cache.delete('ctx_pengaturan_perusahaan')
+        messages.success(self.request, 'Pengaturan perusahaan berhasil diperbarui!')
+        return super().form_valid(form)
+
+
+# ── TEMPLATE CETAK CRUD ──
+
+class TemplateCetakListView(ReadPermissionMixin, ListView):
+    paginate_by = 50
+    model = TemplateCetak
+    template_name = 'pengaturan/template_cetak_list.html'
+    context_object_name = 'templates'
+    ordering = ['jenis']
+    permission_module = 'pengaturan'
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        context['total_template'] = TemplateCetak.objects.count()
+        context['total_aktif'] = TemplateCetak.objects.filter(aktif=True).count()
+        context['total_nonaktif'] = TemplateCetak.objects.filter(aktif=False).count()
+        return context
+
+
+class TemplateCetakUpdateView(UpdatePermissionMixin, UpdateView):
+    model = TemplateCetak
+    template_name = 'pengaturan/template_cetak_form.html'
+    permission_module = 'pengaturan'
+    fields = [
+        'nama', 'jenis', 'header_nama_perusahaan', 'header_alamat',
+        'header_telepon', 'header_email', 'header_website',
+        'footer_ucapan', 'footer_keterangan', 'footer_copyright',
+        'signature_kiri_label', 'signature_kanan_label',
+        'tampilkan_logo', 'tampilkan_website', 'aktif'
+    ]
+    success_url = reverse_lazy('pengaturan:template_cetak_list')
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        context['action'] = 'Edit'
+        return context
+
+
+    def form_valid(self, form):
+
+        messages.success(self.request, 'Template cetak berhasil diperbarui!')
+        return super().form_valid(form)
+
+
+class TemplateCetakCreateView(CreatePermissionMixin, CreateView):
+    model = TemplateCetak
+    template_name = 'pengaturan/template_cetak_form.html'
+    permission_module = 'pengaturan'
+    fields = [
+        'nama', 'jenis', 'header_nama_perusahaan', 'header_alamat',
+        'header_telepon', 'header_email', 'header_website',
+        'footer_ucapan', 'footer_keterangan', 'footer_copyright',
+        'signature_kiri_label', 'signature_kanan_label',
+        'tampilkan_logo', 'tampilkan_website', 'aktif'
+    ]
+    success_url = reverse_lazy('pengaturan:template_cetak_list')
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        context['action'] = 'Tambah'
+        return context
+
+
+    def form_valid(self, form):
+
+        messages.success(self.request, 'Template cetak berhasil ditambahkan!')
+        return super().form_valid(form)
+
+
+# ── MANAJEMEN DATA ──
+
+class ManajemenDataView(ReadPermissionMixin, TemplateView):
+    """Statistik database + riwayat backup."""
+    template_name = 'pengaturan/manajemen_data.html'
+    permission_module = 'pengaturan'
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+
+        try:
+            from apps.properti.models import Properti, TipeKamar, Kamar
+            from apps.penyewa.models import Penyewa
+            from apps.sewa.models import KontrakSewa, TagihanSewa, PembayaranSewa
+            from apps.biaya.models import KategoriBiaya, TransaksiBiaya
+            from apps.activity_log.models import UserActivity
+            from apps.automation.models import LogNotifikasi
+
+            # Coba ambil data HR jika ada
+            try:
+                from apps.hr.models import Karyawan, Departemen
+                karyawan_count = Karyawan.objects.count()
+                departemen_count = Departemen.objects.count()
+            except Exception:
+                karyawan_count = 0
+                departemen_count = 0
+
+            context['stats'] = {
+                'properti': Properti.objects.count(),
+                'tipe_kamar': TipeKamar.objects.count(),
+                'kamar': Kamar.objects.count(),
+                'penyewa': Penyewa.objects.count(),
+                'kategori_biaya': KategoriBiaya.objects.count(),
+                'kontrak_sewa': KontrakSewa.objects.count(),
+                'tagihan_sewa': TagihanSewa.objects.count(),
+                'pembayaran_sewa': PembayaranSewa.objects.count(),
+                'biaya': TransaksiBiaya.objects.count(),
+                'karyawan': karyawan_count,
+                'departemen': departemen_count,
+                'metode_pembayaran': MetodePembayaran.objects.count(),
+                'user': User.objects.count(),
+                'activity_log': UserActivity.objects.count(),
+                'log_notifikasi': LogNotifikasi.objects.count(),
+            }
+        except Exception:
+            context['stats'] = {}
+
+        context['total_transaksi'] = sum(
+            context.get('stats', {}).get(k, 0)
+            for k in ['kontrak_sewa', 'tagihan_sewa', 'pembayaran_sewa', 'biaya']
+        )
+        context['total_master'] = sum(
+            context.get('stats', {}).get(k, 0)
+            for k in ['properti', 'tipe_kamar', 'kamar', 'penyewa']
+        )
+
+        context['riwayat_list'] = BackupHistory.objects.select_related('dibuat_oleh').all()[:50]
+
+        db_path = settings.BASE_DIR / 'db.sqlite3'
+        if db_path.exists():
+            db_size = os.path.getsize(db_path)
+            if db_size < 1024:
+                context['db_size'] = f"{db_size} B"
+            elif db_size < 1024 * 1024:
+                context['db_size'] = f"{db_size / 1024:.1f} KB"
+            else:
+                context['db_size'] = f"{db_size / (1024 * 1024):.1f} MB"
+            context['db_size_bytes'] = db_size
+        else:
+            context['db_size'] = 'N/A'
+            context['db_size_bytes'] = 0
+
+        last_backup = BackupHistory.objects.filter(jenis='backup', status='sukses').first()
+        context['last_backup'] = last_backup
+        return context
+
+
+@login_required
+@require_POST
+def backup_data(request):
+    """Export seluruh database ke file JSON."""
+    if not request.user.is_superuser and not has_permission(request.user, 'create', 'pengaturan'):
+        messages.error(request, 'Anda tidak memiliki izin untuk backup data.')
+        return redirect('pengaturan:manajemen_data')
+
+    try:
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        nama_file = f"backup_{timestamp}.json"
+        from io import StringIO
+        output = StringIO()
+        # --all: termasuk proxy model, --natural-foreign: portabilitas content type
+        # JANGAN pakai --natural-primary agar integer PK tetap terjaga saat restore
+        call_command('dumpdata', '--all', '--natural-foreign',
+                    '--exclude=contenttypes', '--exclude=auth.permission',
+                    '--exclude=admin.logentry', '--exclude=sessions.session',
+                    '--indent=2', stdout=output)
+        json_data = output.getvalue()
+        file_size = len(json_data.encode('utf-8'))
+        # Hitung jumlah record
+        record_count = json_data.count('"model":')
+        BackupHistory.objects.create(
+            nama_file=nama_file, ukuran_file=file_size, jenis='backup',
+            status='sukses', catatan=f"Backup seluruh database ({record_count} record, {file_size / 1024:.1f} KB)",
+            dibuat_oleh=request.user)
+        response = HttpResponse(json_data, content_type='application/json')
+        response['Content-Disposition'] = f'attachment; filename="{nama_file}"'
+        return response
+    except Exception as e:
+        BackupHistory.objects.create(
+            nama_file=f"backup_gagal_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+            ukuran_file=0, jenis='backup', status='gagal',
+            catatan=f"Error: {str(e)}", dibuat_oleh=request.user)
+        messages.error(request, f'Backup gagal: {str(e)}')
+        return redirect('pengaturan:manajemen_data')
+
+
+@login_required
+@require_POST
+def restore_data(request):
+    """
+    Restore data dari file backup JSON.
+    ────────────────────────────────────
+    Strategi (mengikuti pola SERPTECH):
+    1. SIMPAN user admin yang sedang login → agar session tetap valid
+    2. Hapus SEMUA data per-model (child dulu, parent terakhir)
+    3. Hapus profile admin juga (agar loaddata bisa recreate tanpa UNIQUE error)
+    4. Matikan FK constraints saat loaddata → cegah FOREIGN KEY error
+    5. Load data dari backup (fallback: item-by-item jika gagal)
+    6. Nyalakan kembali FK constraints
+    7. Pastikan admin tetap punya profile setelah restore
+    8. VACUUM database
+    """
+    if not request.user.is_superuser and not has_permission(request.user, 'create', 'pengaturan'):
+        messages.error(request, 'Anda tidak memiliki izin untuk restore data.')
+        return redirect('pengaturan:manajemen_data')
+
+    if 'backup_file' not in request.FILES:
+        messages.error(request, 'File backup tidak ditemukan. Pilih file .json untuk restore.')
+        return redirect('pengaturan:manajemen_data')
+
+    backup_file = request.FILES['backup_file']
+    if not backup_file.name.endswith('.json'):
+        messages.error(request, 'Format file tidak valid. Hanya file .json yang diperbolehkan.')
+        return redirect('pengaturan:manajemen_data')
+
+    tmp_path = None
+    try:
+        import logging
+        logger = logging.getLogger(__name__)
+        from django.db import connection
+        from io import StringIO
+
+        content = backup_file.read().decode('utf-8')
+        file_size = len(content.encode('utf-8'))
+
+        # Validasi JSON
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            messages.error(request, 'File JSON tidak valid atau rusak.')
+            return redirect('pengaturan:manajemen_data')
+
+        if not isinstance(data, list):
+            messages.error(request, 'Format file backup tidak valid. File harus berisi data dumpdata Django.')
+            return redirect('pengaturan:manajemen_data')
+
+        if len(data) == 0:
+            messages.error(request, 'File backup kosong, tidak ada data untuk di-restore.')
+            return redirect('pengaturan:manajemen_data')
+
+        excluded_models = {'contenttypes.contenttype', 'auth.permission',
+                            'admin.logentry', 'sessions.session'}
+        filtered_data = [item for item in data if item.get('model') not in excluded_models]
+        model_set = set(item.get('model', '') for item in filtered_data)
+
+        logger.info("[RESTORE] File: %s, ukuran: %d bytes, total objek: %d, setelah filter: %d",
+                    backup_file.name, file_size, len(data), len(filtered_data))
+
+        # Simpan info user aktif
+        current_user = request.user
+        current_user_pk = current_user.pk
+        current_username = current_user.username
+
+        # Tulis data ke file temp
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as tmp:
+            json.dump(filtered_data, tmp, ensure_ascii=False, indent=2)
+            tmp_path = tmp.name
+
+        # === LANGKAH 1: HAPUS SEMUA DATA LAMA (per-model, child→parent) ===
+        logger.info("[RESTORE] Langkah 1: Menghapus semua data lama...")
+
+        from apps.sewa.models import PembayaranSewa, TagihanSewa, KontrakSewa
+        from apps.biaya.models import TransaksiBiaya, KategoriBiaya
+        from apps.activity_log.models import UserActivity
+        from apps.automation.models import LogNotifikasi
+        from apps.properti.models import Properti, TipeKamar, Kamar
+        from apps.penyewa.models import Penyewa
+        from auth.models import Profile
+
+        # Hapus transaksi (child dulu)
+        PembayaranSewa.objects.all().delete()
+        TagihanSewa.objects.all().delete()
+        KontrakSewa.objects.all().delete()
+        TransaksiBiaya.objects.all().delete()
+        KategoriBiaya.objects.all().delete()
+
+        # Hapus master data
+        Penyewa.objects.all().delete()
+        Kamar.objects.all().delete()
+        TipeKamar.objects.all().delete()
+        Properti.objects.all().delete()
+
+        # Hapus metode pembayaran
+        MetodePembayaran.objects.all().delete()
+
+        # Hapus HR data
+        try:
+            from apps.hr.models import Karyawan, Departemen
+            Karyawan.objects.all().delete()
+            Departemen.objects.all().delete()
+        except Exception:
+            pass
+
+        # Hapus log & pengaturan
+        UserActivity.objects.all().delete()
+        LogNotifikasi.objects.all().delete()
+        TemplateCetak.objects.all().delete()
+        BackupHistory.objects.all().delete()
+
+        # Hapus SEMUA profile (termasuk admin) agar loaddata bisa recreate tanpa UNIQUE error
+        Profile.objects.all().delete()
+        # Hapus user LAIN (admin TETAP ADA agar session tidak rusak)
+        User.objects.exclude(pk=current_user_pk).delete()
+
+        # Hapus pengaturan perusahaan (akan di-restore dari backup)
+        PengaturanPerusahaan.objects.all().delete()
+
+        logger.info("[RESTORE] Langkah 1 selesai: Semua data lama berhasil dihapus.")
+
+        # === LANGKAH 2: LOAD DATA DARI BACKUP ===
+        logger.info("[RESTORE] Langkah 2: Memuat data dari backup...")
+
+        # MATIKAN FK CONSTRAINTS sebelum loaddata
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA foreign_keys = OFF")
+        logger.info("[RESTORE] FK constraints dimatikan sementara.")
+
+        load_success = False
+        load_error_msg = ""
+
+        # Percobaan 1: loaddata langsung
+        try:
+            stderr_output = StringIO()
+            call_command('loaddata', tmp_path, '--ignorenonexistent', verbosity=0, stderr=stderr_output)
+            load_success = True
+            load_error_msg = ""
+            logger.info("[RESTORE] Langkah 2 sukses: loaddata berhasil.")
+        except Exception as load_err:
+            load_success = False
+            load_error_msg = str(load_err)
+            stderr_msg = stderr_output.getvalue()
+            logger.error("[RESTORE] Loaddata gagal (percobaan 1): %s | stderr: %s", load_err, stderr_msg)
+
+        # Percobaan 2: item-by-item jika loaddata langsung gagal
+        if not load_success:
+            logger.info("[RESTORE] Percobaan 2: load item per item")
+            success_count = 0
+            error_count = 0
+            error_models = []
+
+            for item in filtered_data:
+                single_tmp = None
+                try:
+                    with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as stmp:
+                        json.dump([item], stmp, ensure_ascii=False)
+                        single_tmp = stmp.name
+
+                    call_command('loaddata', single_tmp, '--ignorenonexistent', verbosity=0, stderr=StringIO())
+                    success_count += 1
+                except Exception as item_err:
+                    error_count += 1
+                    model_name = item.get('model', 'unknown')
+                    if model_name not in error_models:
+                        error_models.append(model_name)
+                        logger.warning("[RESTORE] Gagal memuat model %s: %s", model_name, str(item_err)[:100])
+                finally:
+                    if single_tmp and os.path.exists(single_tmp):
+                        try:
+                            os.unlink(single_tmp)
+                        except OSError:
+                            pass
+
+            if success_count > 0:
+                load_success = True
+                load_error_msg = f"Dimuat {success_count} objek, {error_count} gagal"
+                if error_models:
+                    load_error_msg += f" (model gagal: {', '.join(error_models[:5])})"
+                logger.info("[RESTORE] Item-by-item: %s", load_error_msg)
+
+        # NYALAKAN kembali FK constraints
+        with connection.cursor() as cursor:
+            cursor.execute("PRAGMA foreign_keys = ON")
+        logger.info("[RESTORE] FK constraints diaktifkan kembali.")
+
+        # === LANGKAH 3: PASTIKAN ADMIN TETAP PUNYA PROFILE ===
+        try:
+            if not Profile.objects.filter(user=current_user).exists():
+                Profile.objects.create(
+                    user=current_user,
+                    role='pemilik',
+                    email=current_user.email or ''
+                )
+                logger.info("[RESTORE] Profile admin '%s' dibuat ulang.", current_username)
+        except Exception as profile_err:
+            logger.warning("[RESTORE] Gagal membuat profile admin: %s", profile_err)
+
+        # Pastikan admin tetap superuser
+        try:
+            current_user.refresh_from_db()
+            if not current_user.is_superuser:
+                current_user.is_superuser = True
+                current_user.is_staff = True
+                current_user.save(update_fields=['is_superuser', 'is_staff'])
+        except Exception:
+            pass
+
+        # Re-login user agar session tetap valid
+        try:
+            from django.contrib.auth import login
+            login(request, current_user)
+        except Exception:
+            pass
+
+        # === LANGKAH 4: VACUUM DATABASE ===
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("VACUUM")
+            logger.info("[RESTORE] VACUUM database selesai.")
+        except Exception as vac_err:
+            logger.warning("[RESTORE] VACUUM gagal (tidak fatal): %s", vac_err)
+
+        if load_success:
+            try:
+                BackupHistory.objects.create(
+                    nama_file=backup_file.name, ukuran_file=file_size, jenis='restore',
+                    status='sukses',
+                    catatan=f"Restore dari {backup_file.name} ({file_size / 1024:.1f} KB) - {len(filtered_data)} objek. {load_error_msg}",
+                    dibuat_oleh=current_user)
+            except Exception:
+                pass
+            messages.success(request, f'Data berhasil di-restore dari "{backup_file.name}"! ({len(filtered_data)} objek dimuat) {load_error_msg}')
+        else:
+            raise Exception(f"Semua metode restore gagal: {load_error_msg}")
+
+    except Exception as e:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error("[RESTORE] Error: %s", e, exc_info=True)
+        try:
+            BackupHistory.objects.create(
+                nama_file=backup_file.name, ukuran_file=0, jenis='restore',
+                status='gagal', catatan=f"Error: {str(e)}", dibuat_oleh=request.user)
+        except Exception:
+            pass
+        messages.error(request, f'Restore gagal: {str(e)}')
+    finally:
+        # Pastikan FK constraints selalu aktif
+        try:
+            from django.db import connection as conn
+            with conn.cursor() as cursor:
+                cursor.execute("PRAGMA foreign_keys = ON")
+        except Exception:
+            pass
+        # Hapus temp file
+        if tmp_path and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+    return redirect('pengaturan:manajemen_data')
+
+
+
+
+@login_required
+@require_POST
+def reset_data(request):
+    """Reset SEMUA data SIMKOS - hapus seluruh isi database kecuali akun superuser."""
+    if not request.user.is_superuser and not has_permission(request.user, 'delete', 'pengaturan'):
+        return JsonResponse({'success': False, 'message': 'Tidak memiliki izin.'}, status=403)
+
+    konfirmasi = request.POST.get('konfirmasi', '')
+    if konfirmasi != 'HAPUS SEMUA':
+        messages.error(request, 'Konfirmasi tidak valid. Ketik "HAPUS SEMUA" untuk melanjutkan.')
+        return redirect('pengaturan:manajemen_data')
+
+    try:
+        from django.db import connection
+        from apps.sewa.models import PembayaranSewa, TagihanSewa, KontrakSewa
+        from apps.biaya.models import TransaksiBiaya, KategoriBiaya
+        from apps.activity_log.models import UserActivity
+        from apps.automation.models import LogNotifikasi
+        from apps.properti.models import Properti, TipeKamar, Kamar
+        from apps.penyewa.models import Penyewa
+        from auth.models import Profile
+        from apps.core.models import RolePermission
+
+        # Simpan info user yang sedang login
+        current_user = request.user
+        current_user_pk = current_user.pk
+
+        counts = {}
+
+        # Transaksi
+        counts['Pembayaran Sewa'] = PembayaranSewa.objects.count()
+        counts['Tagihan Sewa'] = TagihanSewa.objects.count()
+        counts['Kontrak Sewa'] = KontrakSewa.objects.count()
+        counts['Transaksi Biaya'] = TransaksiBiaya.objects.count()
+
+        # Master Data
+        counts['Penyewa'] = Penyewa.objects.count()
+        counts['Kamar'] = Kamar.objects.count()
+        counts['Tipe Kamar'] = TipeKamar.objects.count()
+        counts['Properti'] = Properti.objects.count()
+        counts['Kategori Biaya'] = KategoriBiaya.objects.count()
+
+        # Metode Pembayaran
+        counts['Metode Pembayaran'] = MetodePembayaran.objects.count()
+
+        # HR
+        try:
+            from apps.hr.models import Karyawan, Departemen
+            counts['Karyawan'] = Karyawan.objects.count()
+            counts['Departemen'] = Departemen.objects.count()
+        except Exception:
+            pass
+
+        # Log & Riwayat
+        counts['Activity Log'] = UserActivity.objects.count()
+        counts['Log Notifikasi'] = LogNotifikasi.objects.count()
+        counts['Riwayat Backup'] = BackupHistory.objects.count()
+
+        # User & Permissions
+        counts['User lain'] = User.objects.exclude(pk=current_user_pk).count()
+        counts['Role Permission'] = RolePermission.objects.count()
+
+        total_deleted = sum(counts.values())
+
+        # ===== HAPUS SEMUA DATA (urutan: child dulu, lalu parent) =====
+
+        # 1. Hapus transaksi
+        PembayaranSewa.objects.all().delete()
+        TagihanSewa.objects.all().delete()
+        KontrakSewa.objects.all().delete()
+        TransaksiBiaya.objects.all().delete()
+
+        # 2. Hapus master data
+        Penyewa.objects.all().delete()
+        Kamar.objects.all().delete()
+        TipeKamar.objects.all().delete()
+        Properti.objects.all().delete()
+        KategoriBiaya.objects.all().delete()
+
+        # 3. Hapus metode pembayaran
+        MetodePembayaran.objects.all().delete()
+
+        # 4. Hapus HR data
+        try:
+            from apps.hr.models import Karyawan, Departemen
+            Karyawan.objects.all().delete()
+            Departemen.objects.all().delete()
+        except Exception:
+            pass
+
+        # 5. Hapus log & notifikasi
+        UserActivity.objects.all().delete()
+        LogNotifikasi.objects.all().delete()
+        BackupHistory.objects.all().delete()
+
+        # 6. Hapus pengaturan
+        try:
+            TemplateCetak.objects.all().delete()
+        except Exception:
+            pass
+        RolePermission.objects.all().delete()
+
+        # 7. Hapus user lain & profile (PROTEKSI superuser)
+        Profile.objects.exclude(user_id=current_user_pk).delete()
+        User.objects.exclude(pk=current_user_pk).delete()
+
+        # Catatan: Pengaturan Perusahaan DIPERTAHANKAN sesuai keterangan di template
+
+        detail_parts = [f"{name}: {count}" for name, count in counts.items() if count > 0]
+        detail_str = ", ".join(detail_parts) if detail_parts else "Tidak ada data"
+
+        # Buat record riwayat SETELAH menghapus semua
+        BackupHistory.objects.create(
+            nama_file='reset_semua_data', ukuran_file=0, jenis='reset', status='sukses',
+            catatan=f"Hapus SEMUA data ({total_deleted} record). Detail: {detail_str}",
+            dibuat_oleh=current_user)
+        messages.success(request, f'Semua data berhasil dihapus! {total_deleted} record dihapus. Hanya akun admin Anda yang dipertahankan.')
+
+        # VACUUM database agar ukuran file SQLite langsung berkurang
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute('VACUUM')
+        except Exception:
+            pass
+
+    except Exception as e:
+        try:
+            BackupHistory.objects.create(
+                nama_file='reset_semua_data', ukuran_file=0, jenis='reset', status='gagal',
+                catatan=f"Error: {str(e)}", dibuat_oleh=request.user)
+        except Exception:
+            pass
+        messages.error(request, f'Reset gagal: {str(e)}')
+    return redirect('pengaturan:manajemen_data')
+
+
+
+@login_required
+@require_POST
+def hapus_riwayat_backup(request, pk):
+    if not request.user.is_superuser and not has_permission(request.user, 'delete', 'pengaturan'):
+        return JsonResponse({'success': False, 'message': 'Tidak memiliki izin.'}, status=403)
+    riwayat = get_object_or_404(BackupHistory, pk=pk)
+    riwayat.delete()
+    messages.success(request, 'Riwayat berhasil dihapus.')
+    return redirect('pengaturan:manajemen_data')
+
+
+@login_required
+@require_POST
+def bersihkan_log_aktivitas(request):
+    if not request.user.is_superuser and not has_permission(request.user, 'delete', 'pengaturan'):
+        messages.error(request, 'Tidak memiliki izin.')
+        return redirect('pengaturan:manajemen_data')
+    from apps.activity_log.models import UserActivity
+    jumlah = UserActivity.objects.count()
+    UserActivity.objects.all().delete()
+    BackupHistory.objects.create(jenis='reset', nama_file='-', ukuran_file=0, status='sukses',
+                                catatan=f'Membersihkan {jumlah} log aktivitas', dibuat_oleh=request.user)
+    messages.success(request, f'Berhasil membersihkan {jumlah} log aktivitas.')
+    # VACUUM agar ukuran DB langsung berkurang
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute('VACUUM')
+    except Exception:
+        pass
+    return redirect('pengaturan:manajemen_data')
+
+
+@login_required
+@require_POST
+def bersihkan_log_notifikasi(request):
+    if not request.user.is_superuser and not has_permission(request.user, 'delete', 'pengaturan'):
+        messages.error(request, 'Tidak memiliki izin.')
+        return redirect('pengaturan:manajemen_data')
+    from apps.automation.models import LogNotifikasi
+    jumlah = LogNotifikasi.objects.count()
+    LogNotifikasi.objects.all().delete()
+    BackupHistory.objects.create(jenis='reset', nama_file='-', ukuran_file=0, status='sukses',
+                                catatan=f'Membersihkan {jumlah} log notifikasi', dibuat_oleh=request.user)
+    messages.success(request, f'Berhasil membersihkan {jumlah} log notifikasi.')
+    # VACUUM agar ukuran DB langsung berkurang
+    try:
+        from django.db import connection
+        with connection.cursor() as cursor:
+            cursor.execute('VACUUM')
+    except Exception:
+        pass
+    return redirect('pengaturan:manajemen_data')
+
+
+@login_required
+def db_stats_api(request):
+    """API endpoint: ukuran database dan statistik real-time (JSON)."""
+    data = {'db_size': 'N/A', 'db_size_bytes': 0, 'stats': {}, 'total_master': 0, 'total_transaksi': 0}
+
+    # Ukuran database
+    db_path = settings.BASE_DIR / 'db.sqlite3'
+    if db_path.exists():
+        db_size = os.path.getsize(db_path)
+        if db_size < 1024:
+            data['db_size'] = f"{db_size} B"
+        elif db_size < 1024 * 1024:
+            data['db_size'] = f"{db_size / 1024:.1f} KB"
+        else:
+            data['db_size'] = f"{db_size / (1024 * 1024):.1f} MB"
+        data['db_size_bytes'] = db_size
+
+    # Statistik model
+    try:
+        from apps.properti.models import Properti, TipeKamar, Kamar
+        from apps.penyewa.models import Penyewa
+        from apps.sewa.models import KontrakSewa, TagihanSewa, PembayaranSewa
+        from apps.biaya.models import KategoriBiaya, TransaksiBiaya
+        from apps.activity_log.models import UserActivity
+        from apps.automation.models import LogNotifikasi
+
+        try:
+            from apps.hr.models import Karyawan, Departemen
+            karyawan_count = Karyawan.objects.count()
+            departemen_count = Departemen.objects.count()
+        except Exception:
+            karyawan_count = 0
+            departemen_count = 0
+
+        stats = {
+            'properti': Properti.objects.count(),
+            'tipe_kamar': TipeKamar.objects.count(),
+            'kamar': Kamar.objects.count(),
+            'penyewa': Penyewa.objects.count(),
+            'kategori_biaya': KategoriBiaya.objects.count(),
+            'kontrak_sewa': KontrakSewa.objects.count(),
+            'tagihan_sewa': TagihanSewa.objects.count(),
+            'pembayaran_sewa': PembayaranSewa.objects.count(),
+            'biaya': TransaksiBiaya.objects.count(),
+            'karyawan': karyawan_count,
+            'departemen': departemen_count,
+            'metode_pembayaran': MetodePembayaran.objects.count(),
+            'user': User.objects.count(),
+            'activity_log': UserActivity.objects.count(),
+            'log_notifikasi': LogNotifikasi.objects.count(),
+        }
+        data['stats'] = stats
+        data['total_master'] = sum(stats.get(k, 0) for k in ['properti', 'tipe_kamar', 'kamar', 'penyewa'])
+        data['total_transaksi'] = sum(stats.get(k, 0) for k in ['kontrak_sewa', 'tagihan_sewa', 'pembayaran_sewa', 'biaya'])
+    except Exception:
+        pass
+
+    return JsonResponse(data)
+
+
+# ── METODE PEMBAYARAN CRUD ──
+
+class MetodePembayaranListView(ReadPermissionMixin, ListView):
+    paginate_by = 50
+    """Daftar semua metode pembayaran."""
+    model = MetodePembayaran
+    template_name = 'pengaturan/metode_pembayaran_list.html'
+    context_object_name = 'metode_list'
+    ordering = ['nama']
+    permission_module = 'pengaturan'
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        qs = self.get_queryset()
+        # Hitung ringkasan
+        total_saldo = sum(m.saldo_terhitung for m in qs)
+        total_pendapatan = sum(m.total_pendapatan for m in qs)
+        total_pengeluaran = sum(m.total_pengeluaran for m in qs)
+        total_transaksi = sum(m.total_transaksi_count for m in qs)
+        context['ringkasan_saldo'] = total_saldo
+        context['ringkasan_pendapatan'] = total_pendapatan
+        context['ringkasan_pengeluaran'] = total_pengeluaran
+        context['ringkasan_transaksi'] = total_transaksi
+        return context
+
+
+class MetodePembayaranCreateView(CreatePermissionMixin, CreateView):
+    """Tambah metode pembayaran baru."""
+    model = MetodePembayaran
+    template_name = 'pengaturan/metode_pembayaran_form.html'
+    permission_module = 'pengaturan'
+    fields = ['nama', 'kode', 'nama_pemilik', 'deskripsi', 'gambar', 'saldo', 'aktif']
+    success_url = reverse_lazy('pengaturan:metode_pembayaran_list')
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        context['action'] = 'Tambah'
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Metode pembayaran berhasil ditambahkan!')
+        return super().form_valid(form)
+
+
+class MetodePembayaranUpdateView(UpdatePermissionMixin, UpdateView):
+    """Edit metode pembayaran."""
+    model = MetodePembayaran
+    template_name = 'pengaturan/metode_pembayaran_form.html'
+    permission_module = 'pengaturan'
+    fields = ['nama', 'kode', 'nama_pemilik', 'deskripsi', 'gambar', 'saldo', 'aktif']
+    success_url = reverse_lazy('pengaturan:metode_pembayaran_list')
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        context['action'] = 'Edit'
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, 'Metode pembayaran berhasil diperbarui!')
+        return super().form_valid(form)
+
+
+class MetodePembayaranDetailView(ReadPermissionMixin, DetailView):
+    """Detail metode pembayaran."""
+    model = MetodePembayaran
+    template_name = 'pengaturan/metode_pembayaran_detail.html'
+    context_object_name = 'metode'
+    permission_module = 'pengaturan'
+
+    def get_context_data(self, **kwargs):
+        context = TemplateLayout.init(self, super().get_context_data(**kwargs))
+        from django.db.models import Sum, Max
+        from apps.sewa.models import PembayaranSewa
+        from apps.biaya.models import TransaksiBiaya
+
+        metode = self.object
+
+        # Riwayat transaksi terbaru
+        pembayaran_qs = PembayaranSewa.objects.filter(metode_bayar=metode.kode)
+        biaya_qs = TransaksiBiaya.objects.filter(metode_pembayaran=metode.kode, status='approved')
+
+        context['pembayaran_list'] = pembayaran_qs.order_by('-tanggal_bayar')[:10]
+        context['biaya_list'] = biaya_qs.order_by('-tanggal')[:10]
+
+        # Data keuangan
+        total_pendapatan = pembayaran_qs.aggregate(t=Sum('jumlah_bayar'))['t'] or 0
+        total_pengeluaran = biaya_qs.aggregate(t=Sum('jumlah'))['t'] or 0
+        context['total_pendapatan'] = total_pendapatan
+        context['total_pengeluaran'] = total_pengeluaran
+        context['saldo_terhitung'] = metode.saldo + total_pendapatan - total_pengeluaran
+
+        # Pendapatan/pengeluaran tertinggi
+        context['pendapatan_tertinggi'] = pembayaran_qs.aggregate(t=Max('jumlah_bayar'))['t'] or 0
+        context['pengeluaran_tertinggi'] = biaya_qs.aggregate(t=Max('jumlah'))['t'] or 0
+
+        # Total transaksi
+        context['total_transaksi'] = pembayaran_qs.count() + biaya_qs.count()
+
+        # Transaksi lunas (pembayaran yang tagihannya lunas)
+        context['transaksi_lunas'] = pembayaran_qs.filter(tagihan__status='lunas').count()
+
+        return context
+
+
+@login_required
+@require_POST
+def metode_pembayaran_delete(request, pk):
+    """Hapus metode pembayaran via AJAX."""
+    if not request.user.is_superuser and not has_permission(request.user, 'delete', 'pengaturan'):
+        return JsonResponse({'success': False, 'message': 'Tidak memiliki izin.'}, status=403)
+    try:
+        metode = MetodePembayaran.objects.get(pk=pk)
+        # Cek apakah ada transaksi yang menggunakan metode ini
+        from apps.sewa.models import PembayaranSewa
+        from apps.biaya.models import TransaksiBiaya
+        count_pembayaran = PembayaranSewa.objects.filter(metode_bayar=metode.kode).count()
+        count_biaya = TransaksiBiaya.objects.filter(metode_pembayaran=metode.kode).count()
+        if count_pembayaran > 0 or count_biaya > 0:
+            detail = []
+            if count_pembayaran > 0:
+                detail.append(f"{count_pembayaran} pembayaran sewa")
+            if count_biaya > 0:
+                detail.append(f"{count_biaya} transaksi biaya")
+            return JsonResponse({
+                'success': False,
+                'message': f'Tidak dapat menghapus metode "{metode.nama}" karena masih digunakan oleh {", ".join(detail)}. '
+                            f'Ubah status menjadi nonaktif sebagai alternatif.'
+            })
+        metode.delete()
+        return JsonResponse({'success': True, 'message': f'Metode pembayaran "{metode.nama}" berhasil dihapus.'})
+    except MetodePembayaran.DoesNotExist:
+        return JsonResponse({'success': False, 'message': 'Metode pembayaran tidak ditemukan.'}, status=404)
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': f'Gagal menghapus: {str(e)}'}, status=500)
+

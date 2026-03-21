@@ -1,0 +1,191 @@
+{% extends 'layout/layout_vertical.html' %}
+{% comment %}
+==========================================================================
+   TAGIHAN SEWA FORM - Form Tambah/Edit Tagihan (SIMKOS Style)
+   Layout rapi dengan section headers, field bayar & metode pembayaran
+==========================================================================
+{% endcomment %}
+{% load static humanize %}
+
+{% block title %}{{ title|default:"Buat Tagihan" }} - SIMKOS{% endblock title %}
+
+{% block content %}
+<div class="container-xxl flex-grow-1 container-p-y">
+    <h4 class="py-3 mb-4">
+        <span class="text-muted fw-light">Sewa / Tagihan /</span> {{ title|default:"Buat Tagihan" }}
+    </h4>
+
+    <div class="row">
+        <div class="col-xl-8">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">
+                        <i class="ri-bill-line me-2 text-primary"></i>Formulir Tagihan Sewa
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        {% if form.errors %}
+                        <div class="alert alert-danger alert-dismissible" role="alert">
+                            <h6 class="alert-heading mb-1">Error!</h6>
+                            <ul class="mb-0">
+                                {% for field in form %}
+                                    {% for error in field.errors %}
+                                        <li>{{ field.label }}: {{ error }}</li>
+                                    {% endfor %}
+                                {% endfor %}
+                                {% for error in form.non_field_errors %}
+                                    <li>{{ error }}</li>
+                                {% endfor %}
+                            </ul>
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                        {% endif %}
+
+                        <!-- Section: Informasi Kontrak -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-file-text-line me-1"></i>Informasi Kontrak
+                        </h6>
+                        <div class="row mb-4">
+                            <div class="col-12">
+                                <div class="form-floating form-floating-outline">
+                                    {{ form.kontrak }}
+                                    <label for="{{ form.kontrak.id_for_label }}">{{ form.kontrak.label }} <span class="text-danger">*</span></label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Section: Detail Tagihan -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-calendar-line me-1"></i>Detail Tagihan
+                        </h6>
+                        <div class="row mb-3">
+                            <div class="col-md-3">
+                                <div class="form-floating form-floating-outline">
+                                    {{ form.periode_bulan }}
+                                    <label for="{{ form.periode_bulan.id_for_label }}">{{ form.periode_bulan.label }} <span class="text-danger">*</span></label>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="form-floating form-floating-outline">
+                                    {{ form.periode_tahun }}
+                                    <label for="{{ form.periode_tahun.id_for_label }}">{{ form.periode_tahun.label }} <span class="text-danger">*</span></label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ form.jumlah.id_for_label }}">{{ form.jumlah.label }} <span class="text-danger">*</span></label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text">Rp</span>
+                                    {{ form.jumlah }}
+                                    <span class="input-group-text">.00</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <div class="form-floating form-floating-outline">
+                                    {{ form.tanggal_jatuh_tempo }}
+                                    <label for="{{ form.tanggal_jatuh_tempo.id_for_label }}">{{ form.tanggal_jatuh_tempo.label }} <span class="text-danger">*</span></label>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="form-floating form-floating-outline">
+                                    {{ form.status }}
+                                    <label for="{{ form.status.id_for_label }}">{{ form.status.label }}</label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Section: Informasi Pembayaran -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-money-dollar-circle-line me-1"></i>Informasi Pembayaran
+                        </h6>
+                        <p class="text-muted small mb-3">
+                            <i class="ri-information-line me-1"></i>
+                            Opsional — isi jika penyewa ingin deposit/bayar langsung saat buat tagihan. Pembayaran akan otomatis tercatat di modul Pembayaran.
+                        </p>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ form.jumlah_bayar.id_for_label }}">{{ form.jumlah_bayar.label }}</label>
+                                <div class="input-group input-group-merge">
+                                    <span class="input-group-text">Rp</span>
+                                    {{ form.jumlah_bayar }}
+                                    <span class="input-group-text">.00</span>
+                                </div>
+                                <small class="text-muted">Nominal deposit/bayar oleh penyewa</small>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label" for="{{ form.metode_pembayaran.id_for_label }}">{{ form.metode_pembayaran.label }}</label>
+                                {{ form.metode_pembayaran }}
+                                <small class="text-muted">Pilih metode pembayaran</small>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <!-- Section: Catatan -->
+                        <h6 class="fw-semibold text-primary mb-3">
+                            <i class="ri-sticky-note-line me-1"></i>Catatan
+                        </h6>
+                        <div class="mb-3">
+                            <div class="form-floating form-floating-outline">
+                                {{ form.catatan }}
+                                <label for="{{ form.catatan.id_for_label }}">{{ form.catatan.label }}</label>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="ri-save-line me-1"></i> Simpan Tagihan
+                            </button>
+                            <a href="{% url 'sewa:tagihan_list' %}" class="btn btn-outline-secondary">
+                                <i class="ri-close-line me-1"></i> Batal
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Sidebar Info -->
+        <div class="col-xl-4">
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h6 class="fw-semibold mb-3">
+                        <i class="ri-information-line me-1 text-primary"></i>Panduan Pengisian
+                    </h6>
+                    <ul class="list-unstyled mb-0">
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-success me-1"></i>
+                            <small>Pilih <strong>Kontrak</strong> yang masih aktif</small>
+                        </li>
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-success me-1"></i>
+                            <small>Isi <strong>Periode</strong> (bulan/tahun) tagihan</small>
+                        </li>
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-success me-1"></i>
+                            <small><strong>Jumlah</strong> tagihan akan otomatis dari harga sewa kontrak</small>
+                        </li>
+                        <li class="mb-2">
+                            <i class="ri-checkbox-circle-line text-info me-1"></i>
+                            <small><strong>Bayar</strong> bersifat opsional — untuk mencatat deposit langsung</small>
+                        </li>
+                        <li class="mb-0">
+                            <i class="ri-checkbox-circle-line text-info me-1"></i>
+                            <small>Data pembayaran akan otomatis tersinkron ke modul <strong>Pembayaran</strong></small>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock content %}
