@@ -111,21 +111,21 @@
       }
 
       function _downloadBlobWebView(blob, filename) {
-        if (navigator.share && navigator.canShare) {
-          try {
-            var file = new File([blob], filename, { type: blob.type });
-            var shareData = { files: [file], title: filename };
-            if (navigator.canShare(shareData)) {
-              navigator.share(shareData)
-                .then(function() { console.log('[ExportUtils] Shared via native'); })
-                .catch(function(err) {
-                  if (err.name !== 'AbortError') { _showOverlay(blob, filename); }
-                });
-              return;
-            }
-          } catch (e) { console.warn('[ExportUtils] Share error:', e); }
-        }
-        _showOverlay(blob, filename);
+        // Langsung konversi blob ke data URI → trigger download.
+        // DownloadListener di Java menangkap dan simpan ke Downloads.
+        // TANPA popup, TANPA navigator.share.
+        var reader = new FileReader();
+        reader.onloadend = function() {
+          var a = document.createElement('a');
+          a.href = reader.result;
+          a.download = filename;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          a.click();
+          setTimeout(function() { document.body.removeChild(a); }, 1000);
+          console.log('[ExportUtils] Download triggered: ' + filename);
+        };
+        reader.readAsDataURL(blob);
       }
 
       function _downloadBlobBrowser(blob, filename) {
@@ -135,29 +135,7 @@
           a.href = url; a.download = filename; a.style.display = 'none';
           document.body.appendChild(a); a.click();
           setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);
-        } catch (e) { _showOverlay(blob, filename); }
-      }
-
-      function _showOverlay(blob, filename) {
-        var blobUrl = URL.createObjectURL(blob);
-        var overlay = document.createElement('div');
-        overlay.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:99999;display:flex;align-items:center;justify-content:center;padding:20px;';
-        overlay.innerHTML =
-          '<div style="background:#fff;border-radius:16px;padding:28px 24px;text-align:center;max-width:360px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3);">' +
-            '<div style="width:60px;height:60px;margin:0 auto 16px;background:linear-gradient(135deg,#e8e8ff,#d0d0ff);border-radius:50%;display:flex;align-items:center;justify-content:center;">' +
-              '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#696cff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>' +
-            '</div>' +
-            '<h5 style="margin:0 0 8px;color:#333;font-size:1.1rem;font-weight:700;">File Siap Diunduh</h5>' +
-            '<p style="color:#697a8d;font-size:0.85rem;margin-bottom:20px;line-height:1.4;">Ketuk tombol di bawah untuk menyimpan file <strong>' + filename + '</strong></p>' +
-            '<a id="_dl_link" href="' + blobUrl + '" download="' + filename + '" style="display:block;background:linear-gradient(135deg,#696cff,#5f61e6);color:#fff;padding:14px 24px;border-radius:10px;text-decoration:none;font-weight:600;font-size:0.95rem;margin-bottom:12px;">\uD83D\uDCE5 Download ' + filename + '</a>' +
-            '<button id="_dl_close" style="background:none;border:none;color:#697a8d;cursor:pointer;font-size:0.8rem;padding:8px 16px;">Tutup</button>' +
-          '</div>';
-        overlay.querySelector('#_dl_close').addEventListener('click', function() { overlay.remove(); URL.revokeObjectURL(blobUrl); });
-        overlay.addEventListener('click', function(e) { if (e.target === overlay) { overlay.remove(); URL.revokeObjectURL(blobUrl); } });
-        overlay.querySelector('#_dl_link').addEventListener('click', function() {
-          setTimeout(function() { overlay.remove(); setTimeout(function() { URL.revokeObjectURL(blobUrl); }, 5000); }, 1000);
-        });
-        document.body.appendChild(overlay);
+        } catch (e) { console.error('[ExportUtils] Browser download gagal:', e); }
       }
 
       function exportTableToExcel(tableId, filename) {
@@ -277,7 +255,6 @@
 
       window._downloadBlob = _downloadBlob;
       window._isWebView = _isWebView;
-      window._showManualDownloadLink = _showOverlay;
       window.exportTableToExcel = exportTableToExcel;
       window.exportTableToPDF = exportTableToPDF;
     })();
