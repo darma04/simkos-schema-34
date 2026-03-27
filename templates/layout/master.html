@@ -62,6 +62,25 @@
           padding-top: env(safe-area-inset-top, 0px) !important;
         }
       }
+
+      /* ═══════════════════════════════════════════════════════════════════
+         GLOBAL FORM SPACING — Konsistensi jarak antar field di semua form
+         ═══════════════════════════════════════════════════════════════════ */
+      .card-body form .row {
+        row-gap: 0.25rem;
+      }
+      .card-body form .mb-3 {
+        margin-bottom: 1rem !important;
+      }
+      @media (max-width: 767.98px) {
+        .card-body form .row > [class*="col-md-"],
+        .card-body form .row > [class*="col-lg-"] {
+          margin-bottom: 0.75rem;
+        }
+        .card-body form .row > [class*="col-md-"]:last-child {
+          margin-bottom: 0;
+        }
+      }
     </style>
 
 
@@ -110,32 +129,145 @@
         }
       }
 
-      function _downloadBlobWebView(blob, filename) {
-        // Langsung konversi blob ke data URI → trigger download.
-        // DownloadListener di Java menangkap dan simpan ke Downloads.
-        // TANPA popup, TANPA navigator.share.
-        var reader = new FileReader();
-        reader.onloadend = function() {
-          var a = document.createElement('a');
-          a.href = reader.result;
-          a.download = filename;
-          a.style.display = 'none';
-          document.body.appendChild(a);
-          a.click();
-          setTimeout(function() { document.body.removeChild(a); }, 1000);
-          console.log('[ExportUtils] Download triggered: ' + filename);
-        };
-        reader.readAsDataURL(blob);
+      // ═══════════════════════════════════════════════════════════════
+      // METODE DEFINITIF: PROTOTYPE-LEVEL INTERCEPT
+      // ═══════════════════════════════════════════════════════════════
+
+      // ── 1. SIMPAN SALINAN BLOB SAAT createObjectURL DIPANGGIL ──────
+      var _blobStore = {};
+      var _origCreateObjectURL = URL.createObjectURL.bind(URL);
+      URL.createObjectURL = function(blob) {
+          var url = _origCreateObjectURL(blob);
+          if (blob instanceof Blob) {
+              _blobStore[url] = blob;
+              console.log('[ExportUtils] Blob tersimpan:', url, 'size:', blob.size, 'type:', blob.type);
+          }
+          return url;
+      };
+
+      // ── 2. TUNDA revokeObjectURL SAMPAI PROSES SELESAI ─────────────
+      var _origRevokeObjectURL = URL.revokeObjectURL.bind(URL);
+      URL.revokeObjectURL = function(url) {
+          if (_blobStore[url]) {
+              setTimeout(function() {
+                  delete _blobStore[url];
+                  try { _origRevokeObjectURL(url); } catch(e){}
+              }, 60000);
+              return;
+          }
+          try { _origRevokeObjectURL(url); } catch(e){}
+      };
+
+      // ── 3. KIRIM KE ANDROID VIA NATIVE BRIDGE (CHUNKING) ──────────
+      function _sendToSerpApp(pureBase64, fname, mimeType) {
+         if (!window.SerpApp) return false;
+         if (window.SerpApp.saveBase64Chunk) {
+             console.log('[ExportUtils] Mengirim via Async Chunking:', fname, '(' + pureBase64.length + ' chars)');
+             var chunkSize = 65536;
+             var i = 0;
+             function sendNext() {
+                 if (i < pureBase64.length) {
+                     window.SerpApp.saveBase64Chunk(pureBase64.substring(i, i + chunkSize));
+                     i += chunkSize;
+                     setTimeout(sendNext, 5);
+                 } else {
+                     window.SerpApp.finishBase64Chunk(fname, mimeType);
+                 }
+             }
+             sendNext();
+         } else if (window.SerpApp.saveBase64) {
+             window.SerpApp.saveBase64(pureBase64, fname, mimeType);
+         }
+         return true;
       }
 
+      // ── 4. KONVERSI BLOB KE BASE64 DAN KIRIM ──────────────────────
+      function _downloadBlobWebView(blob, filename) {
+          var reader = new FileReader();
+          reader.onloadend = function() {
+              var base64data = reader.result;
+              var pureBase64 = base64data.split(',')[1];
+              if (pureBase64) {
+                  if (window.SerpApp) {
+                      _sendToSerpApp(pureBase64, filename, blob.type || 'application/octet-stream');
+                  } else {
+                      var a = document.createElement('a');
+                      a.href = base64data;
+                      a.download = filename;
+                      a.style.display = 'none';
+                      document.body.appendChild(a);
+                      a.click();
+                      setTimeout(function() { document.body.removeChild(a); }, 1000);
+                  }
+              }
+          };
+          reader.readAsDataURL(blob);
+      }
+
+      // ── 5. PROTOTYPE-LEVEL INTERCEPT (ANTI-BYPASS MUTLAK) ─────────
+      var _origAnchorClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function() {
+          if (_isWebView() && this.href) {
+              if (this.href.indexOf('blob:') === 0) {
+                  var fname = this.getAttribute('download') || this.download || 'Exported_File';
+                  var blobUrl = this.href;
+                  var cachedBlob = _blobStore[blobUrl];
+                  
+                  console.log('[ExportUtils] PROTOTYPE intercept blob:', blobUrl, 'cached:', !!cachedBlob);
+                  
+                  if (cachedBlob) {
+                      _downloadBlobWebView(cachedBlob, fname);
+                  } else {
+                      fetch(blobUrl)
+                          .then(function(res) { return res.blob(); })
+                          .then(function(blob) { _downloadBlobWebView(blob, fname); })
+                          .catch(function(err) { console.error('[ExportUtils] Blob fetch gagal:', err); });
+                  }
+                  return;
+              }
+              if (this.href.indexOf('data:') === 0) {
+                  var fname2 = this.getAttribute('download') || this.download || 'Exported_File';
+                  var pureBase64 = this.href.split(',')[1];
+                  var mimeType = this.href.split(';')[0].substring(5);
+                  console.log('[ExportUtils] PROTOTYPE intercept data:', fname2);
+                  _sendToSerpApp(pureBase64, fname2, mimeType);
+                  return;
+              }
+          }
+          return _origAnchorClick.apply(this, arguments);
+      };
+
+      // ── 5.5 EVETARGET PROTOTYPE INTERCEPT (MENGATASI FileSaver.js) ─
+      var _origDispatchEvent = EventTarget.prototype.dispatchEvent;
+      EventTarget.prototype.dispatchEvent = function(event) {
+          if (event && event.type === 'click' && _isWebView() && this instanceof HTMLAnchorElement && this.href) {
+              if (this.href.indexOf('blob:') === 0 || this.href.indexOf('data:') === 0) {
+                  console.log('[ExportUtils] DISPATCH intercept (FileSaver):', this.href.substring(0, 100));
+                  HTMLAnchorElement.prototype.click.call(this);
+                  return false;
+              }
+          }
+          return _origDispatchEvent.apply(this, arguments);
+      };
+
+      // ── 6. BROWSER DOWNLOAD (Jalur non-WebView) ───────────────────
       function _downloadBlobBrowser(blob, filename) {
         try {
           var url = URL.createObjectURL(blob);
           var a = document.createElement('a');
-          a.href = url; a.download = filename; a.style.display = 'none';
-          document.body.appendChild(a); a.click();
-          setTimeout(function() { document.body.removeChild(a); URL.revokeObjectURL(url); }, 300);
-        } catch (e) { console.error('[ExportUtils] Browser download gagal:', e); }
+          a.href = url;
+          a.download = filename;
+          a.style.display = 'none';
+          document.body.appendChild(a);
+          _origAnchorClick.call(a);
+          setTimeout(function() {
+            document.body.removeChild(a);
+            _origRevokeObjectURL(url);
+            delete _blobStore[url];
+          }, 300);
+        } catch (e) {
+          console.error('[ExportUtils] Browser download gagal:', e);
+        }
       }
 
       function exportTableToExcel(tableId, filename) {
@@ -226,31 +358,72 @@
 
       // Global Download Interceptor
       if (_isWebView()) {
-        var _origClick = HTMLAnchorElement.prototype.click;
-        HTMLAnchorElement.prototype.click = function() {
-          var dl = this.getAttribute('download');
-          var href = this.href || '';
-          if (dl && (href.indexOf('blob:') === 0 || href.indexOf('data:') === 0)) {
-            var fname = dl || 'download';
-            if (href.indexOf('blob:') === 0) {
-              fetch(href).then(function(r){return r.blob();})
-                .then(function(b){ _downloadBlob(b, fname); })
-                .catch(function(e){ _origClick.call(this); }.bind(this));
+        document.addEventListener('click', function(e) {
+          var target = e.target.closest('a');
+          if (!target) return;
+          
+          var href = target.href || '';
+          var dl = target.getAttribute('download');
+          var isFileLink = href.match(/\.(csv|pdf|xlsx?|docx?|zip|png|jpe?g)$/i);
+          
+          if (!dl && !isFileLink && href.indexOf('blob:') !== 0 && href.indexOf('data:') !== 0) {
+            return;
+          }
+          
+          e.preventDefault();
+          e.stopPropagation();
+          
+          var fname = dl || href.split('/').pop() || ('download_' + Date.now());
+          if (fname.indexOf('?') > -1) fname = fname.split('?')[0];
+          if (fname.indexOf('#') > -1) fname = fname.split('#')[0];
+          
+          console.log('[ExportUtils] Intercepted link klik:', href.substring(0, 100));
+          
+          if (href.indexOf('data:') === 0) {
+            var pureBase64 = href.split(',')[1];
+            var mimeType = href.split(';')[0].substring(5);
+            if (window.SerpApp && typeof window.SerpApp.saveBase64 === 'function') {
+               window.SerpApp.saveBase64(pureBase64, fname, mimeType);
             } else {
-              try {
-                var parts = href.split(','); var meta = parts[0]; var raw = parts[1];
-                var mm = meta.match(/data:([^;]+)/);
-                var mime = mm ? mm[1] : 'application/octet-stream';
-                var bs = meta.indexOf('base64') !== -1 ? atob(raw) : decodeURIComponent(raw);
-                var ab = new ArrayBuffer(bs.length); var ia = new Uint8Array(ab);
-                for (var i = 0; i < bs.length; i++) ia[i] = bs.charCodeAt(i);
-                _downloadBlob(new Blob([ab], {type: mime}), fname);
-              } catch(e) { _origClick.call(this); }
+               var a = document.createElement('a'); a.href = href; a.download = fname; a.style.display = 'none';
+               document.body.appendChild(a); a.click(); setTimeout(function(){ document.body.removeChild(a); },500);
             }
             return;
           }
-          _origClick.call(this);
-        };
+          
+          var btnOriginalText = target.innerHTML;
+          target.innerHTML = '⏳ Sedang mengunduh...';
+          target.style.opacity = '0.7';
+          target.style.pointerEvents = 'none';
+          
+          fetch(href)
+            .then(function(res) {
+              if (!res.ok) throw new Error('HTTP ' + res.status);
+              var disposition = res.headers.get('content-disposition');
+              if (disposition && disposition.indexOf('filename=') !== -1) {
+                  var matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disposition);
+                  if (matches != null && matches[1]) { 
+                      fname = matches[1].replace(/['"]/g, '');
+                  }
+              }
+              return res.blob();
+            })
+            .then(function(blob) {
+              console.log('[ExportUtils] Fetch selesai, ukuran blob:', blob.size);
+              _downloadBlob(blob, fname); 
+            })
+            .catch(function(err) {
+              console.error('[ExportUtils] Gagal mengunduh URL:', err);
+              alert('Gagal mengunduh file. Percobaan manual akan dilakukan.');
+              window.open(href, '_system'); 
+            })
+            .finally(function() {
+              target.innerHTML = btnOriginalText;
+              target.style.opacity = '1';
+              target.style.pointerEvents = 'auto';
+            });
+            
+        }, true);
       }
 
       window._downloadBlob = _downloadBlob;
