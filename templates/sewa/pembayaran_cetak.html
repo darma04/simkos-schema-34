@@ -49,20 +49,17 @@
 
         .invoice-footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #ddd; text-align: center; font-size: 11px; color: #666; }
 
-        .print-btn { position: fixed; top: 20px; right: 20px; background: #28a745; color: white; border: none; padding: 12px 24px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold; box-shadow: 0 4px 12px rgba(40, 167, 69, 0.4); z-index: 1000; }
-        .print-btn:hover { background: #218838; }
+
 
         @media print {
             body { padding: 0; }
             .invoice-container { border: none; padding: 0; }
-            .print-btn { display: none !important; }
             @page { margin: 1cm; }
         }
     </style>
 </head>
 
-<body>
-    <button class="print-btn" onclick="window.print()">🖨️ Cetak Kwitansi</button>
+<body onload="window.print()">
 
     <div class="invoice-container">
         <!-- Header -->
