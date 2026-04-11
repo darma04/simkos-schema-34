@@ -467,7 +467,7 @@
         var config = colors[type] || colors.error;
 
         var toast = document.createElement('div');
-        toast.style.cssText = 'background:#fff;border-radius:12px;padding:14px 18px;box-shadow:0 8px 32px rgba(0,0,0,0.15);display:flex;align-items:flex-start;gap:12px;pointer-events:auto;animation:slideInRight 0.3s ease-out;border-left:4px solid ' + config.bg + ';';
+        toast.style.cssText = 'background:#fff;border-radius:12px;padding:14px 18px;box-shadow:0 8px 32px rgba(0,0,0,0.15);display:flex;align-items:flex-start;gap:12px;pointer-events:auto;animation:slideInRight 0.3s ease-out;';
         toast.innerHTML = '<div style="font-size:20px;flex-shrink:0;margin-top:2px">' + config.icon + '</div>'
           + '<div style="flex:1;min-width:0">'
           + '<div style="font-weight:600;font-size:14px;color:#566a7f;margin-bottom:4px">' + title + '</div>'
