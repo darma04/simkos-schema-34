@@ -122,13 +122,25 @@ def has_permission(user, action, module=None, sub_module=None):
             if sub_module:
                 sub_key = (module_normalized, sub_module.lower())
                 if sub_key in perms_cache:
-                    return perms_cache[sub_key].get(perm_field, False)
-                # Jika sub-module tidak ditemukan → fallback ke module level
+                    sub_value = perms_cache[sub_key].get(perm_field, False)
+                    if sub_value:
+                        return True
+                    # Sub-modul ada tapi permission False →
+                    # fallback ke module level (karena UI hanya set can_view untuk sub-modul)
 
             # ===== CEK MODULE LEVEL (fallback) =====
             mod_key = (module_normalized, None)
             if mod_key in perms_cache:
                 return perms_cache[mod_key].get(perm_field, False)
+
+            # ===== FALLBACK SUB-MODULE =====
+            # Jika user mengecek level modul, tapi database hanya punya record level sub-modul
+            # (karena checkbox UI hanya ada di level sub-modul), anggap True jika ADA minimal
+            # 1 sub-modul di modul ini yang memiliki permission tersebut.
+            if not sub_module:
+                for (mod, sub), perm_dict in perms_cache.items():
+                    if mod == module_normalized and sub is not None and perm_dict.get(perm_field, False):
+                        return True
 
             # Tidak ada permission record → DITOLAK
             return False
@@ -235,6 +247,11 @@ def get_all_submodules_from_menu(module):
     from django.conf import settings
 
     try:
+        # Reverse mapping: DB module → menu slug
+        MODULE_TO_SLUG = {
+            'user_management': 'users',
+        }
+
         # Cache menu data di memori (baca file hanya sekali)
         if _menu_cache is None:
             menu_path = os.path.join(
@@ -246,9 +263,11 @@ def get_all_submodules_from_menu(module):
 
         # Cari modul di menu (normalisasi dash dan underscore)
         module_norm = module.lower().replace('-', '_')
+        menu_slug_norm = MODULE_TO_SLUG.get(module_norm, module_norm)
+
         for item in _menu_cache.get('menu', []):
             item_slug_norm = item.get('slug', '').lower().replace('-', '_')
-            if item_slug_norm == module_norm and 'submenu' in item:
+            if (item_slug_norm == module_norm or item_slug_norm == menu_slug_norm) and 'submenu' in item:
                 # Ekstrak slug sub-modul dari submenu
                 subs = []
                 for sub_item in item['submenu']:

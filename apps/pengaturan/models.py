@@ -79,6 +79,12 @@ class PengaturanPerusahaan(models.Model):
         verbose_name="Pesan Maintenance"
     )
     
+    # Dynamic Branding
+    auth_image = models.ImageField(upload_to='pengaturan/auth/', blank=True, null=True, verbose_name="Ilustrasi Login/Register")
+    auth_background_image = models.ImageField(upload_to='pengaturan/auth/', blank=True, null=True, verbose_name="Background Login/Register")
+    misc_image = models.ImageField(upload_to='pengaturan/misc/', blank=True, null=True, verbose_name="Ilustrasi Error/Maintenance")
+    misc_background_image = models.ImageField(upload_to='pengaturan/misc/', blank=True, null=True, verbose_name="Background Error/Maintenance")
+    
     # Email/SMTP Settings for sending emails (forgot password, register verification)
     email_smtp_host = models.CharField(max_length=100, default='smtp.gmail.com', verbose_name="SMTP Host")
     email_smtp_port = models.IntegerField(default=587, verbose_name="SMTP Port")

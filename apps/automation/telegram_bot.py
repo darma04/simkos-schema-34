@@ -184,11 +184,18 @@ def _polling_loop():
 
     try:
         from .models import PengaturanTelegram
-        pengaturan = PengaturanTelegram.load()
+        try:
+            pengaturan = PengaturanTelegram.load()
+        except Exception:
+            # Tabel belum ada di schema ini (multi-tenant public schema)
+            logger.debug("[TelegramBot] Polling dilewati (tabel belum tersedia di schema ini)")
+            print("[TelegramBot] Polling dilewati (tabel belum tersedia di schema ini)")
+            _polling_active = False
+            return
 
         if not pengaturan.bot_token:
             logger.warning("[TelegramBot] Bot Token belum dikonfigurasi, polling tidak dimulai")
-            print("[TelegramBot] Bot Token belum dikonfigurasi")
+            print("[TelegramBot] Bot Token belum dikonfigurasi, polling tidak dimulai")
             _polling_active = False
             return
 
