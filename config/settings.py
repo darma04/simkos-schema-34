@@ -401,10 +401,12 @@ if not DEBUG:
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-    # SameSite=None agar cookie session & CSRF dikirim oleh Capacitor Android WebView.
-    # WAJIB dipasangkan dengan Secure=True (sudah diset di atas).
-    SESSION_COOKIE_SAMESITE = "None"
-    CSRF_COOKIE_SAMESITE = "None"
+    # Kembalikan ke SameSite=Lax.
+    # Karena Capacitor menggunakan 'server.url', konteksnya adalah First-Party (bukan cross-origin).
+    # Penggunaan SameSite=None di Android WebView seringkali ditolak oleh WebView itu sendiri,
+    # sehingga menyebabkan gagal login. SameSite=Lax adalah pengaturan paling stabil.
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Lax"
 
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
