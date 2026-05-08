@@ -353,7 +353,6 @@ LOGIN_REDIRECT_URL = "/"
 
 SESSION_ENGINE = "django.contrib.sessions.backends.db"
 SESSION_COOKIE_HTTPONLY = True
-SESSION_COOKIE_SAMESITE = "Lax"
 SESSION_COOKIE_AGE = 86400  # 24 hours
 SESSION_SAVE_EVERY_REQUEST = True  # Refresh session expiry setiap request (cegah logout mendadak)
 
@@ -361,6 +360,9 @@ SESSION_SAVE_EVERY_REQUEST = True  # Refresh session expiry setiap request (cega
 # saat multiple Django app berjalan di localhost (port berbeda)
 SESSION_COOKIE_NAME = "simkos_sessionid"
 CSRF_COOKIE_NAME = "simkos_csrftoken"
+# CSRF_COOKIE_HTTPONLY=False agar JavaScript di WebView bisa membaca token dari cookie
+# untuk dikirim via header X-CSRFToken (diperlukan oleh beberapa form/AJAX).
+CSRF_COOKIE_HTTPONLY = False
 
 # CSRF Failure Handler — Redirect ramah saat token kedaluwarsa (bukan error 403)
 CSRF_FAILURE_VIEW = "auth.csrf_failure.csrf_failure_view"
@@ -391,29 +393,27 @@ SECURE_CONTENT_TYPE_NOSNIFF = True
 
 # --- Pengaturan KHUSUS PRODUCTION (hanya aktif saat DEBUG=False) ---
 if not DEBUG:
-    # HTTPS wajib: semua HTTP request di-redirect ke HTTPS
     SECURE_SSL_REDIRECT = True
+    SECURE_HSTS_SECONDS = 31536000
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    SECURE_HSTS_PRELOAD = True
 
-    # HSTS (HTTP Strict Transport Security):
-    # Browser akan SELALU menggunakan HTTPS selama 1 tahun
-    # Bahkan jika user mengetik http:// → otomatis jadi https://
-    SECURE_HSTS_SECONDS = 31536000       # 1 tahun dalam detik
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True  # Berlaku juga untuk subdomain
-    SECURE_HSTS_PRELOAD = True             # Daftarkan ke HSTS preload list browser
-
-    # Cookie hanya dikirim via HTTPS (cegah penyadapan session)
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
 
-    # Proxy header: PythonAnywhere menggunakan reverse proxy
-    # Header ini memberitahu Django bahwa request aslinya HTTPS
-    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+    # SameSite=None agar cookie session & CSRF dikirim oleh Capacitor Android WebView.
+    # WAJIB dipasangkan dengan Secure=True (sudah diset di atas).
+    SESSION_COOKIE_SAMESITE = "None"
+    CSRF_COOKIE_SAMESITE = "None"
 
-    # Referrer Policy: jangan kirim URL lengkap ke situs eksternal
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
     SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
 else:
-    # Development: cookie bisa dikirim tanpa HTTPS
+    # Development: SameSite=Lax (standar untuk HTTP localhost)
+    SESSION_COOKIE_SAMESITE = "Lax"
+    CSRF_COOKIE_SAMESITE = "Lax"
     SESSION_COOKIE_SECURE = False
+    CSRF_COOKIE_SECURE = False
 
 # Your stuff...
 # ------------------------------------------------------------------------------
