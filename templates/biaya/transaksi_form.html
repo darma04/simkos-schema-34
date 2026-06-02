@@ -79,17 +79,17 @@
                                 </div>
 
                                 <div class="mb-3">
-                                    <label class="form-label">{{ form.cabang.label }}</label>
-                                    {{ form.cabang }}
-                                    <div class="form-text">Pilih properti untuk biaya ini (opsional)</div>
-                                </div>
-
-                                <div class="mb-3">
                                     <label class="form-label">{{ form.jumlah.label }} <span class="text-danger">*</span></label>
                                     <div class="input-group">
                                         <span class="input-group-text">Rp</span>
                                         {{ form.jumlah }}
                                     </div>
+                                </div>
+
+                                <div class="mb-3">
+                                    <label class="form-label">{{ form.status.label }} <span class="text-danger">*</span></label>
+                                    {{ form.status }}
+                                    <div class="form-text">Status persetujuan transaksi biaya</div>
                                 </div>
                             </div>
 

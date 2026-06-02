@@ -189,14 +189,16 @@ class RolePermission(models.Model):
     # choices dihapus agar bisa menerima role kustom dari database
     role = models.CharField(
         max_length=50,
-        verbose_name="Role"
+        verbose_name="Role",
+        db_index=True
     )
 
     # Modul yang diakses (contoh: 'produk', 'inventory', 'pos')
     module = models.CharField(
         max_length=50,
         choices=MODULE_CHOICES,
-        verbose_name="Module"
+        verbose_name="Module",
+        db_index=True
     )
 
     # Sub-modul (opsional) — untuk permission lebih detail

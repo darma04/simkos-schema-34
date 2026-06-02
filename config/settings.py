@@ -93,7 +93,6 @@ if _USE_MULTI_TENANT:
         "apps.automation",
         "apps.hr",
         "apps.ai_assistant",
-        "apps.sample",
         "apps.pages",
     ]
 
@@ -119,7 +118,6 @@ if _USE_MULTI_TENANT:
         "apps.automation",
         "apps.hr",
         "apps.ai_assistant",
-        "apps.sample",
         "apps.pages",
     ]
 
@@ -156,7 +154,6 @@ else:
         "apps.automation",
         "apps.hr",
         "apps.ai_assistant",
-        "apps.sample",
         "apps.pages",
     ]
     TENANT_MODEL = "tenants.TenantClient"
@@ -288,7 +285,7 @@ LANGUAGES = [
 # ! Make sure you have cleared the browser cache after changing the default language
 LANGUAGE_CODE = "en"
 
-TIME_ZONE = "UTC"
+TIME_ZONE = "Asia/Jakarta"
 
 USE_I18N = True
 

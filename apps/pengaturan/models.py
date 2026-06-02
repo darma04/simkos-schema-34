@@ -164,6 +164,7 @@ class TemplateCetak(models.Model):
         ('tagihan', 'Tagihan Sewa'),
         ('kwitansi', 'Kwitansi Pembayaran'),
         ('slip_gaji', 'Slip Gaji Karyawan'),
+        ('expense', 'Bukti Pengeluaran Biaya'),
         ('export_excel', 'Template Export Excel'),
         ('export_pdf', 'Template Export PDF'),
     )
@@ -235,6 +236,13 @@ class TemplateCetak(models.Model):
                 'signature_kanan_label': 'Pengelola KOS',
                 'footer_ucapan': 'Slip gaji ini bersifat rahasia.',
                 'footer_keterangan': 'Dokumen ini dicetak secara otomatis oleh sistem.',
+            },
+            'expense': {
+                'nama': 'Template Bukti Pengeluaran Biaya',
+                'signature_kiri_label': 'Disetujui Oleh',
+                'signature_kanan_label': 'Dicatat Oleh',
+                'footer_ucapan': 'Dokumen ini sah sebagai bukti pengeluaran.',
+                'footer_keterangan': 'Dokumen ini dicetak secara otomatis dan sah tanpa tanda tangan.',
             },
             'export_excel': {
                 'nama': 'Template Export Excel',
@@ -352,14 +360,26 @@ class MetodePembayaran(models.Model):
 
     @property
     def total_pengeluaran(self):
-        """Total pengeluaran dari transaksi biaya yang menggunakan metode ini."""
+        """Total pengeluaran dari transaksi biaya + penggajian yang sudah dibayar (konsisten dengan Dashboard & Laporan)."""
         from django.db.models import Sum
         from apps.biaya.models import TransaksiBiaya
-        # Hitung semua transaksi (tidak filter status) agar data muncul
-        total = TransaksiBiaya.objects.filter(
-            metode_pembayaran=self.kode
-        ).exclude(status='rejected').aggregate(t=Sum('jumlah'))['t'] or 0
-        return total
+        # Hanya transaksi biaya yang sudah disetujui (status='approved')
+        biaya_total = TransaksiBiaya.objects.filter(
+            metode_pembayaran=self.kode,
+            status='approved'
+        ).aggregate(t=Sum('jumlah'))['t'] or 0
+
+        # Tambahkan gaji karyawan yang sudah dibayar via metode ini
+        try:
+            from apps.hr.models import Penggajian
+            gaji_total = Penggajian.objects.filter(
+                metode_pembayaran=self.kode,
+                status='dibayar'
+            ).aggregate(t=Sum('gaji_bersih'))['t'] or 0
+        except Exception:
+            gaji_total = 0
+
+        return biaya_total + gaji_total
 
     @property
     def saldo_terhitung(self):
@@ -368,9 +388,21 @@ class MetodePembayaran(models.Model):
 
     @property
     def total_transaksi_count(self):
-        """Total jumlah transaksi yang menggunakan metode ini."""
+        """Total jumlah transaksi yang menggunakan metode ini (filter status valid)."""
         from apps.sewa.models import PembayaranSewa
         from apps.biaya.models import TransaksiBiaya
         pembayaran_count = PembayaranSewa.objects.filter(metode_bayar=self.kode).count()
-        biaya_count = TransaksiBiaya.objects.filter(metode_pembayaran=self.kode).count()
-        return pembayaran_count + biaya_count
+        biaya_count = TransaksiBiaya.objects.filter(
+            metode_pembayaran=self.kode,
+            status='approved'
+        ).count()
+        gaji_count = 0
+        try:
+            from apps.hr.models import Penggajian
+            gaji_count = Penggajian.objects.filter(
+                metode_pembayaran=self.kode,
+                status='dibayar'
+            ).count()
+        except Exception:
+            pass
+        return pembayaran_count + biaya_count + gaji_count

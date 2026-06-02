@@ -139,6 +139,19 @@ class TagihanSewa(models.Model):
             if not self.nomor_tagihan:
                 self.nomor_tagihan = self.generate_nomor()
             super().save(*args, **kwargs)
+            # Re-evaluate status berdasarkan total_dibayar saat ini
+            # (penting saat user edit field 'jumlah' atau 'status')
+            if self.pk and self.pembayaran.exists():
+                total_bayar = self.total_dibayar
+                new_status = self.status
+                if total_bayar >= self.jumlah:
+                    new_status = 'lunas'
+                elif total_bayar > 0:
+                    new_status = 'sebagian'
+                if new_status != self.status:
+                    # Hindari rekursi: update via queryset bypass save()
+                    type(self).objects.filter(pk=self.pk).update(status=new_status)
+                    self.status = new_status
 
     def generate_nomor(self):
         """Generate nomor tagihan: TGH/2026/02/0001"""
@@ -273,4 +286,38 @@ class PembayaranSewa(models.Model):
             tagihan.status = 'lunas'
         elif total_bayar > 0:
             tagihan.status = 'sebagian'
-        tagihan.save()
+        else:
+            tagihan.status = 'belum_bayar'
+        # Bypass save() override untuk hindari rekursi update_status
+        type(tagihan).objects.filter(pk=tagihan.pk).update(status=tagihan.status)
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║          POST-DELETE SIGNAL: REVERT STATUS TAGIHAN            ║
+# ╚══════════════════════════════════════════════════════════════╝
+# Saat PembayaranSewa dihapus, status tagihan harus dievaluasi ulang
+# karena total_dibayar berkurang.
+
+from django.db.models.signals import post_delete
+from django.dispatch import receiver
+
+
+@receiver(post_delete, sender=PembayaranSewa)
+def _revert_tagihan_status_on_pembayaran_delete(sender, instance, **kwargs):
+    """Re-evaluate status tagihan setelah pembayaran dihapus."""
+    try:
+        tagihan = instance.tagihan
+        # Cek apakah tagihan masih ada (mungkin di-cascade delete)
+        TagihanSewa.objects.filter(pk=tagihan.pk).exists() or None
+        tagihan.refresh_from_db()
+        total_bayar = tagihan.total_dibayar
+        if total_bayar >= tagihan.jumlah:
+            new_status = 'lunas'
+        elif total_bayar > 0:
+            new_status = 'sebagian'
+        else:
+            new_status = 'belum_bayar'
+        TagihanSewa.objects.filter(pk=tagihan.pk).update(status=new_status)
+    except Exception:
+        # Tagihan sudah dihapus (cascade) atau error lain — abaikan
+        pass

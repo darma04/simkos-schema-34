@@ -11,17 +11,23 @@ from django.db.models import Sum
 from apps.sewa.models import KontrakSewa, TagihanSewa, PembayaranSewa
 from apps.sewa.forms import KontrakSewaForm, TagihanSewaForm, PembayaranSewaForm
 from web_project import TemplateLayout
+from apps.core.mixins import (
+    ReadPermissionMixin, CreatePermissionMixin,
+    UpdatePermissionMixin, DeletePermissionMixin,
+)
 
 
 # ╔══════════════════════════════════════════════════════════════╗
 # ║                    KONTRAK SEWA CRUD                         ║
 # ╚══════════════════════════════════════════════════════════════╝
 
-class KontrakSewaListView(ListView):
+class KontrakSewaListView(ReadPermissionMixin, ListView):
     paginate_by = 50
     model = KontrakSewa
     template_name = 'sewa/kontrak_list.html'
     context_object_name = 'kontrak_list'
+    permission_module = 'sewa'
+    permission_sub_module = 'kontrak'
 
     def get_queryset(self):
         return super().get_queryset().select_related('penyewa', 'kamar', 'kamar__properti')
@@ -35,10 +41,12 @@ class KontrakSewaListView(ListView):
         return context
 
 
-class KontrakSewaDetailView(DetailView):
+class KontrakSewaDetailView(ReadPermissionMixin, DetailView):
     model = KontrakSewa
     template_name = 'sewa/kontrak_detail.html'
     context_object_name = 'kontrak'
+    permission_module = 'sewa'
+    permission_sub_module = 'kontrak'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -48,11 +56,13 @@ class KontrakSewaDetailView(DetailView):
         return context
 
 
-class KontrakSewaCreateView(CreateView):
+class KontrakSewaCreateView(CreatePermissionMixin, CreateView):
     model = KontrakSewa
     form_class = KontrakSewaForm
     template_name = 'sewa/kontrak_form.html'
     success_url = reverse_lazy('sewa:kontrak_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'kontrak'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -61,15 +71,18 @@ class KontrakSewaCreateView(CreateView):
         return context
 
     def form_valid(self, form):
+        form.instance.dibuat_oleh = self.request.user
         messages.success(self.request, 'Kontrak sewa berhasil dibuat')
         return super().form_valid(form)
 
 
-class KontrakSewaUpdateView(UpdateView):
+class KontrakSewaUpdateView(UpdatePermissionMixin, UpdateView):
     model = KontrakSewa
     form_class = KontrakSewaForm
     template_name = 'sewa/kontrak_form.html'
     success_url = reverse_lazy('sewa:kontrak_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'kontrak'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -82,9 +95,11 @@ class KontrakSewaUpdateView(UpdateView):
         return super().form_valid(form)
 
 
-class KontrakSewaDeleteView(DeleteView):
+class KontrakSewaDeleteView(DeletePermissionMixin, DeleteView):
     model = KontrakSewa
     success_url = reverse_lazy('sewa:kontrak_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'kontrak'
 
     def delete(self, request, *args, **kwargs):
         from django.db.models import ProtectedError
@@ -106,11 +121,13 @@ class KontrakSewaDeleteView(DeleteView):
 # ║                    TAGIHAN SEWA CRUD                         ║
 # ╚══════════════════════════════════════════════════════════════╝
 
-class TagihanSewaListView(ListView):
+class TagihanSewaListView(ReadPermissionMixin, ListView):
     paginate_by = 50
     model = TagihanSewa
     template_name = 'sewa/tagihan_list.html'
     context_object_name = 'tagihan_list'
+    permission_module = 'sewa'
+    permission_sub_module = 'tagihan'
 
     def get_queryset(self):
         return super().get_queryset().select_related('kontrak__penyewa')
@@ -122,19 +139,18 @@ class TagihanSewaListView(ListView):
         context['tagihan_belum_bayar'] = qs.filter(status__in=['belum_bayar', 'terlambat']).count()
         context['tagihan_lunas'] = qs.filter(status='lunas').count()
         context['total_nominal'] = qs.aggregate(total=Sum('jumlah'))['total'] or 0
-        # Hitung total pembayaran dari semua tagihan yang ada
-        from django.db.models import Subquery, OuterRef, DecimalField
-        from django.db.models.functions import Coalesce
         context['total_sudah_bayar'] = PembayaranSewa.objects.aggregate(
             total=Sum('jumlah_bayar'))['total'] or 0
         return context
 
 
-class TagihanSewaCreateView(CreateView):
+class TagihanSewaCreateView(CreatePermissionMixin, CreateView):
     model = TagihanSewa
     form_class = TagihanSewaForm
     template_name = 'sewa/tagihan_form.html'
     success_url = reverse_lazy('sewa:tagihan_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'tagihan'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -143,7 +159,6 @@ class TagihanSewaCreateView(CreateView):
         return context
 
     def form_valid(self, form):
-        from django.db import transaction
         from datetime import date
         tagihan = form.save(commit=False)
         tagihan.dibuat_oleh = self.request.user
@@ -153,7 +168,7 @@ class TagihanSewaCreateView(CreateView):
         jumlah_bayar = form.cleaned_data.get('jumlah_bayar') or 0
         metode = form.cleaned_data.get('metode_pembayaran') or ''
         if jumlah_bayar > 0:
-            PembayaranSewa.objects.create(
+            pembayaran = PembayaranSewa(
                 tagihan=tagihan,
                 tanggal_bayar=date.today(),
                 jumlah_bayar=jumlah_bayar,
@@ -161,23 +176,38 @@ class TagihanSewaCreateView(CreateView):
                 catatan=f"Pembayaran otomatis dari tagihan {tagihan.nomor_tagihan}",
                 dicatat_oleh=self.request.user,
             )
+            # Validasi sebelum simpan agar tidak overpayment
+            try:
+                pembayaran.full_clean()
+                pembayaran.save()
+                # Kirim notifikasi kwitansi untuk pembayaran otomatis
+                try:
+                    from apps.automation.signals import kirim_notifikasi_kwitansi
+                    kirim_notifikasi_kwitansi(pembayaran)
+                except Exception:
+                    pass
+            except Exception:
+                # Validasi gagal — biarkan tagihan tetap, tanpa pembayaran
+                pass
 
-        # Kirim notifikasi Telegram
+        # Kirim notifikasi Telegram tagihan
         try:
             from apps.automation.signals import kirim_notifikasi_tagihan
             kirim_notifikasi_tagihan(tagihan)
         except Exception:
-            pass  # Jangan block transaksi jika Telegram gagal
+            pass
 
         messages.success(self.request, 'Tagihan berhasil dibuat')
         return super().form_valid(form)
 
 
-class TagihanSewaUpdateView(UpdateView):
+class TagihanSewaUpdateView(UpdatePermissionMixin, UpdateView):
     model = TagihanSewa
     form_class = TagihanSewaForm
     template_name = 'sewa/tagihan_form.html'
     success_url = reverse_lazy('sewa:tagihan_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'tagihan'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -186,7 +216,6 @@ class TagihanSewaUpdateView(UpdateView):
         return context
 
     def form_valid(self, form):
-        from django.db import transaction
         from datetime import date
         tagihan = form.save(commit=False)
         tagihan.save()
@@ -195,20 +224,21 @@ class TagihanSewaUpdateView(UpdateView):
         jumlah_bayar = form.cleaned_data.get('jumlah_bayar') or 0
         metode = form.cleaned_data.get('metode_pembayaran') or ''
 
-        # Cari pembayaran otomatis yang sudah ada
         existing_auto = tagihan.pembayaran.filter(
             catatan__startswith="Pembayaran otomatis dari tagihan"
         ).first()
 
         if jumlah_bayar > 0:
             if existing_auto:
-                # Update pembayaran yang sudah ada
                 existing_auto.jumlah_bayar = jumlah_bayar
                 existing_auto.metode_bayar = metode
-                existing_auto.save()
+                try:
+                    existing_auto.full_clean()
+                    existing_auto.save()
+                except Exception:
+                    pass
             else:
-                # Buat pembayaran baru
-                PembayaranSewa.objects.create(
+                pembayaran = PembayaranSewa(
                     tagihan=tagihan,
                     tanggal_bayar=date.today(),
                     jumlah_bayar=jumlah_bayar,
@@ -216,17 +246,31 @@ class TagihanSewaUpdateView(UpdateView):
                     catatan=f"Pembayaran otomatis dari tagihan {tagihan.nomor_tagihan}",
                     dicatat_oleh=self.request.user,
                 )
+                try:
+                    pembayaran.full_clean()
+                    pembayaran.save()
+                except Exception:
+                    pass
         elif existing_auto and jumlah_bayar == 0:
-            # Hapus pembayaran otomatis jika jumlah_bayar diubah ke 0
             existing_auto.delete()
+
+        # Re-evaluate status tagihan setelah perubahan
+        if tagihan.pembayaran.exists():
+            first_pembayaran = tagihan.pembayaran.first()
+            first_pembayaran.update_status_tagihan()
+        else:
+            tagihan.status = 'belum_bayar'
+            tagihan.save()
 
         messages.success(self.request, 'Tagihan berhasil diperbarui')
         return super().form_valid(form)
 
 
-class TagihanSewaDeleteView(DeleteView):
+class TagihanSewaDeleteView(DeletePermissionMixin, DeleteView):
     model = TagihanSewa
     success_url = reverse_lazy('sewa:tagihan_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'tagihan'
 
     def delete(self, request, *args, **kwargs):
         from django.db.models import ProtectedError
@@ -240,7 +284,6 @@ class TagihanSewaDeleteView(DeleteView):
         except Exception as e:
             return JsonResponse({'success': False, 'message': f'Terjadi kesalahan saat menghapus data. Silakan coba lagi.'})
 
-
     def post(self, request, *args, **kwargs):
         return self.delete(request, *args, **kwargs)
 
@@ -249,11 +292,13 @@ class TagihanSewaDeleteView(DeleteView):
 # ║                   PEMBAYARAN SEWA CRUD                       ║
 # ╚══════════════════════════════════════════════════════════════╝
 
-class PembayaranSewaListView(ListView):
+class PembayaranSewaListView(ReadPermissionMixin, ListView):
     paginate_by = 50
     model = PembayaranSewa
     template_name = 'sewa/pembayaran_list.html'
     context_object_name = 'pembayaran_list'
+    permission_module = 'sewa'
+    permission_sub_module = 'pembayaran'
 
     def get_queryset(self):
         return super().get_queryset().select_related('tagihan__kontrak__penyewa')
@@ -266,11 +311,13 @@ class PembayaranSewaListView(ListView):
         return context
 
 
-class PembayaranSewaCreateView(CreateView):
+class PembayaranSewaCreateView(CreatePermissionMixin, CreateView):
     model = PembayaranSewa
     form_class = PembayaranSewaForm
     template_name = 'sewa/pembayaran_form.html'
     success_url = reverse_lazy('sewa:pembayaran_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'pembayaran'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -280,29 +327,42 @@ class PembayaranSewaCreateView(CreateView):
 
     def form_valid(self, form):
         """Simpan pembayaran baru dan kirim notifikasi Telegram."""
+        form.instance.dicatat_oleh = self.request.user
         response = super().form_valid(form)
 
-        # Kirim notifikasi Telegram
         try:
             from apps.automation.signals import kirim_notifikasi_kwitansi
             kirim_notifikasi_kwitansi(self.object)
         except Exception:
-            pass  # Jangan block transaksi jika Telegram gagal
+            pass
 
         messages.success(self.request, 'Pembayaran berhasil dicatat')
         return response
 
 
-class PembayaranSewaDeleteView(DeleteView):
+class PembayaranSewaDeleteView(DeletePermissionMixin, DeleteView):
     model = PembayaranSewa
     success_url = reverse_lazy('sewa:pembayaran_list')
+    permission_module = 'sewa'
+    permission_sub_module = 'pembayaran'
 
     def delete(self, request, *args, **kwargs):
         from django.db.models import ProtectedError
         self.object = self.get_object()
+        tagihan = self.object.tagihan
         try:
             nomor = self.object.nomor_pembayaran
             self.object.delete()
+            # Re-evaluate status tagihan setelah pembayaran dihapus
+            tagihan.refresh_from_db()
+            total_bayar = tagihan.total_dibayar
+            if total_bayar >= tagihan.jumlah:
+                tagihan.status = 'lunas'
+            elif total_bayar > 0:
+                tagihan.status = 'sebagian'
+            else:
+                tagihan.status = 'belum_bayar'
+            tagihan.save()
             return JsonResponse({'success': True, 'message': f'Pembayaran {nomor} berhasil dihapus'})
         except ProtectedError:
             return JsonResponse({'success': False, 'message': f'Tidak dapat menghapus pembayaran "{self.object.nomor_pembayaran}" karena masih memiliki data terkait. Silakan hapus data terkait terlebih dahulu.'})
@@ -317,11 +377,13 @@ class PembayaranSewaDeleteView(DeleteView):
 # ║                    CETAK TAGIHAN                             ║
 # ╚══════════════════════════════════════════════════════════════╝
 
-class TagihanCetakView(DetailView):
+class TagihanCetakView(ReadPermissionMixin, DetailView):
     """Halaman cetak tagihan/invoice format A4."""
     model = TagihanSewa
     template_name = 'sewa/tagihan_cetak.html'
     context_object_name = 'tagihan'
+    permission_module = 'sewa'
+    permission_sub_module = 'tagihan'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -331,7 +393,6 @@ class TagihanCetakView(DetailView):
         context['kamar'] = tagihan.kontrak.kamar
         context['properti'] = tagihan.kontrak.kamar.properti
         context['pembayaran_list'] = tagihan.pembayaran.all().order_by('tanggal_bayar')
-        # Data perusahaan untuk logo di header cetak
         try:
             from apps.pengaturan.models import PengaturanPerusahaan
             context['perusahaan'] = PengaturanPerusahaan.load()
@@ -344,11 +405,13 @@ class TagihanCetakView(DetailView):
 # ║                  PEMBAYARAN DETAIL & CETAK                    ║
 # ╚══════════════════════════════════════════════════════════════╝
 
-class PembayaranDetailView(DetailView):
+class PembayaranDetailView(ReadPermissionMixin, DetailView):
     """Halaman detail pembayaran."""
     model = PembayaranSewa
     template_name = 'sewa/pembayaran_detail.html'
     context_object_name = 'pembayaran'
+    permission_module = 'sewa'
+    permission_sub_module = 'pembayaran'
 
     def get_context_data(self, **kwargs):
         context = TemplateLayout.init(self, super().get_context_data(**kwargs))
@@ -361,11 +424,13 @@ class PembayaranDetailView(DetailView):
         return context
 
 
-class PembayaranCetakView(DetailView):
+class PembayaranCetakView(ReadPermissionMixin, DetailView):
     """Halaman cetak kwitansi pembayaran format A4."""
     model = PembayaranSewa
     template_name = 'sewa/pembayaran_cetak.html'
     context_object_name = 'pembayaran'
+    permission_module = 'sewa'
+    permission_sub_module = 'pembayaran'
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -375,7 +440,6 @@ class PembayaranCetakView(DetailView):
         context['penyewa'] = p.tagihan.kontrak.penyewa
         context['kamar'] = p.tagihan.kontrak.kamar
         context['properti'] = p.tagihan.kontrak.kamar.properti
-        # Data perusahaan untuk logo di header cetak
         try:
             from apps.pengaturan.models import PengaturanPerusahaan
             context['perusahaan'] = PengaturanPerusahaan.load()
