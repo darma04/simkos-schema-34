@@ -284,6 +284,27 @@
     flex: 0 0 100% !important;
   }
 
+  /* ── CHART CARD EXCEPTION ──
+     Specificity 0,4,0 > original 0,3,0 agar flex-nowrap menang
+     atas rule flex-wrap di atas. Untuk card-header chart yang
+     menggunakan 3-dot dropdown + Unduh Grafik. */
+  .card-header.flex-nowrap.d-flex.justify-content-between {
+    flex-wrap: nowrap !important;
+  }
+  .card-header.flex-nowrap.d-flex.justify-content-between > h5,
+  .card-header.flex-nowrap.d-flex.justify-content-between > h6 {
+    width: auto !important;
+    flex: 1 1 auto !important;
+    min-width: 0 !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+  .card-header.flex-nowrap.d-flex.justify-content-between > .dropdown {
+    flex: 0 0 auto !important;
+    width: auto !important;
+  }
+
   /* Tombol export di dalam .gap-2 → flex-grow supaya rata,
      dengan override padding & font agar TIDAK gepeng/ciut di mobile.
      Override btn-sm (11px / 0.25rem) menjadi ukuran yang nyaman */

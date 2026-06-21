@@ -31,7 +31,10 @@
 
 # Import dari framework Django
 from django.core.cache import cache  # Framework cache bawaan Django
+from django.db import connection     # Untuk akses schema_name pada Isolated Schema
 from functools import wraps          # Untuk decorator yang mempertahankan metadata
+
+DEFAULT_TENANT_CACHE_NAMESPACES = ('view_response', 'context_processor')
 
 
 def normalize_role_code(role_code):
@@ -70,6 +73,63 @@ def get_role_permissions_cache_key(role_code):
     role = normalize_role_code(role_code)
     version = get_role_permissions_cache_version(role)
     return f'role_perms_{role}_v{version}'
+
+
+def get_tenant_cache_scope(request=None):
+    """Scope cache per tenant/schema agar Isolated Schema tidak saling berbagi data."""
+    tenant = getattr(request, 'tenant', None) if request is not None else None
+    schema_name = (
+        getattr(tenant, 'schema_name', None)
+        or getattr(connection, 'schema_name', None)
+        or 'default'
+    )
+    host = request.get_host() if request is not None else ''
+    return f'{schema_name}:{host}'
+
+
+def get_tenant_cache_version_scope(request=None):
+    """Scope versi cache berbasis schema agar invalidasi signal tetap tenant-safe."""
+    tenant = getattr(request, 'tenant', None) if request is not None else None
+    schema_name = (
+        getattr(tenant, 'schema_name', None)
+        or getattr(connection, 'schema_name', None)
+        or 'default'
+    )
+    return str(schema_name)
+
+
+def get_tenant_namespace_cache_version(namespace, request=None):
+    """Ambil versi cache namespace untuk tenant/schema aktif."""
+    scope = get_tenant_cache_version_scope(request)
+    return cache.get(f'tenant_cache_version:{scope}:{namespace}', 1)
+
+
+def bump_tenant_namespace_cache_version(namespace, request=None):
+    """Naikkan versi cache namespace untuk tenant/schema aktif."""
+    scope = get_tenant_cache_version_scope(request)
+    cache_key = f'tenant_cache_version:{scope}:{namespace}'
+    current_version = cache.get(cache_key, 1)
+    next_version = current_version + 1
+    cache.set(cache_key, next_version, None)
+    return next_version
+
+
+def invalidate_tenant_response_cache(request=None, namespaces=None):
+    """
+    Invalidate cache tampilan tenant aktif dengan menaikkan versi namespace.
+
+    Pendekatan versioning dipakai karena backend cache Django tidak selalu
+    mendukung delete by pattern. Pada Isolated Schema, scope versi memakai
+    schema aktif sehingga tenant lain tidak terdampak.
+    """
+    target_namespaces = namespaces or DEFAULT_TENANT_CACHE_NAMESPACES
+    versions = {}
+    for namespace in target_namespaces:
+        versions[namespace] = bump_tenant_namespace_cache_version(namespace, request=request)
+    return {
+        'scope': get_tenant_cache_version_scope(request),
+        'versions': versions,
+    }
 
 
 def cache_user_permissions(timeout=300):  # 300 detik = 5 menit

@@ -1,5 +1,28 @@
 {% extends 'layout/layout_vertical.html' %}
 {% load static humanize %}
+
+{% comment %}
+  ==========================================================================
+  DASHBOARD - Dashboard
+  ==========================================================================
+  Halaman Dashboard untuk modul Dashboard.
+  Template ini merender data dari view ke HTML yang ditampilkan di browser.
+
+  FLOW DATA:
+  - URL: /dashboard/ -> View di apps/dashboard/views.py- View: Mengambil data, menyiapkan context, render template ini- Template: File ini (HTML + Django template tags)- Response: HTML yang ditampilkan di browser user
+
+  RELASI KE MODUL LAIN:
+  - apps/dashboard/views.py -> View (handler untuk halaman ini)- apps/dashboard/models.py -> Model (sumber data)- apps/dashboard/urls.py -> URL routing- layout/ -> Template induk (sidebar, header, footer)
+
+  BAGIAN YANG BOLEH/TIDAK BOLEH DIUBAH:
+  - BOLEH diubah: Tampilan HTML, CSS inline, JavaScript- JANGAN diubah: {% extends %} dan {% block %} structure- JANGAN dihapus: {% csrf_token %} di form
+
+  TIPS & DEBUGGING:
+  - Error 'TemplateDoesNotExist'? Cek template_name di views.py- Variabel {{ }} kosong? Cek get_context_data() di views.py- Layout rusak? Pastikan TemplateLayout.init() dipanggil di view
+
+  ==========================================================================
+{% endcomment %}
+
 {% block title %}Dashboard - SIMKOS{% endblock title %}
 
 {% block vendor_css %}
@@ -14,7 +37,7 @@
 
 {% block content %}
 <div class="container-xxl flex-grow-1 container-p-y">
-    <!-- Header -->
+    
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h4 class="mb-1"><i class="ri-home-smile-line me-2 text-primary"></i>Dashboard SIMKOS</h4>
@@ -26,9 +49,8 @@
         </div>
     </div>
 
-    <!-- Kartu Statistik Utama -->
     <div class="row g-3 mb-4">
-        <!-- Total Properti -->
+        
         <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -48,7 +70,6 @@
             </div>
         </div>
 
-        <!-- Penyewa Aktif -->
         <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -68,7 +89,6 @@
             </div>
         </div>
 
-        <!-- Kontrak Aktif -->
         <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -88,7 +108,6 @@
             </div>
         </div>
 
-        <!-- Tagihan Pending -->
         <div class="col-6 col-xl-3 col-lg-3 col-md-6 col-sm-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -109,9 +128,8 @@
         </div>
     </div>
 
-    <!-- Keuangan Cards -->
     <div class="row g-3 mb-4">
-        <!-- Pemasukan -->
+        
         <div class="col-6 col-xl-4 col-md-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -131,7 +149,6 @@
             </div>
         </div>
 
-        <!-- Pengeluaran -->
         <div class="col-6 col-xl-4 col-md-6">
             <div class="card h-100">
                 <div class="card-body">
@@ -151,7 +168,6 @@
             </div>
         </div>
 
-        <!-- Tingkat Hunian -->
         <div class="col-xl-4 col-md-12">
             <div class="card h-100">
                 <div class="card-body">
@@ -179,15 +195,22 @@
         </div>
     </div>
 
-    <!-- Charts Row -->
     <div class="row g-3 mb-4">
-        <!-- Grafik Pemasukan & Pengeluaran -->
+        
         <div class="col-xl-8 col-lg-7">
             <div class="card h-100">
-                <div class="card-header d-flex justify-content-between align-items-center pb-1">
-                    <div>
-                        <h5 class="mb-0"><i class="ri-line-chart-line me-2 text-primary"></i>Pemasukan & Pengeluaran</h5>
-                        <small class="text-muted">{% if is_filtered %}Periode: {{ bulan_ini }}{% else %}6 Bulan Terakhir{% endif %}</small>
+                <div class="card-header d-flex flex-nowrap align-items-center justify-content-between pb-1">
+                    <h5 class="mb-0 me-2"><i class="ri-line-chart-line me-2 text-primary"></i>Pemasukan &amp; Pengeluaran</h5>
+                    <div class="dropdown flex-shrink-0">
+                        <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button" data-bs-toggle="dropdown">
+                            <i class="ri-more-2-line ri-20px"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="javascript:window.location.reload();">
+                                <i class="ri-loop-left-line me-2"></i>Refresh Data</a>
+                            <a class="dropdown-item" href="javascript:void(0)" onclick="if(window.__revenueChart) window.__revenueChart.exportTo({type:'png'});">
+                                <i class="ri-download-2-line me-2"></i>Unduh Grafik</a>
+                        </div>
                     </div>
                 </div>
                 <div class="card-body pt-2">
@@ -196,12 +219,21 @@
             </div>
         </div>
 
-        <!-- Grafik Status Kamar -->
         <div class="col-xl-4 col-lg-5">
             <div class="card h-100">
-                <div class="card-header pb-1">
-                    <h5 class="mb-0"><i class="ri-pie-chart-2-line me-2 text-info"></i>Status Kamar</h5>
-                    <small class="text-muted">Distribusi {{ total_kamar }} Kamar</small>
+                <div class="card-header d-flex flex-nowrap align-items-center justify-content-between pb-1">
+                    <h5 class="mb-0 me-2"><i class="ri-pie-chart-2-line me-2 text-info"></i>Status Kamar</h5>
+                    <div class="dropdown flex-shrink-0">
+                        <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button" data-bs-toggle="dropdown">
+                            <i class="ri-more-2-line ri-20px"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="javascript:window.location.reload();">
+                                <i class="ri-loop-left-line me-2"></i>Refresh Data</a>
+                            <a class="dropdown-item" href="javascript:void(0)" onclick="if(window.__roomStatusChart) window.__roomStatusChart.exportTo({type:'png'});">
+                                <i class="ri-download-2-line me-2"></i>Unduh Grafik</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body pt-2 d-flex flex-column justify-content-center">
                     <div id="roomStatusChart" style="min-height: 250px;"></div>
@@ -210,14 +242,23 @@
         </div>
     </div>
 
-    <!-- Grafik Tagihan + Tabel Tagihan Belum Bayar -->
     <div class="row g-3 mb-4">
-        <!-- Grafik Status Tagihan -->
+        
         <div class="col-xl-4 col-lg-5">
             <div class="card h-100">
-                <div class="card-header pb-1">
-                    <h5 class="mb-0"><i class="ri-bar-chart-2-line me-2 text-warning"></i>Status Tagihan</h5>
-                    <small class="text-muted">Rekap Seluruh Tagihan</small>
+                <div class="card-header d-flex flex-nowrap align-items-center justify-content-between pb-1">
+                    <h5 class="mb-0 me-2"><i class="ri-bar-chart-2-line me-2 text-warning"></i>Status Tagihan</h5>
+                    <div class="dropdown flex-shrink-0">
+                        <button class="btn btn-text-secondary rounded-pill text-muted border-0 p-1" type="button" data-bs-toggle="dropdown">
+                            <i class="ri-more-2-line ri-20px"></i>
+                        </button>
+                        <div class="dropdown-menu dropdown-menu-end">
+                            <a class="dropdown-item" href="javascript:window.location.reload();">
+                                <i class="ri-loop-left-line me-2"></i>Refresh Data</a>
+                            <a class="dropdown-item" href="javascript:void(0)" onclick="if(window.__invoiceStatusChart) window.__invoiceStatusChart.exportTo({type:'png'});">
+                                <i class="ri-download-2-line me-2"></i>Unduh Grafik</a>
+                        </div>
+                    </div>
                 </div>
                 <div class="card-body pt-2 d-flex flex-column justify-content-center">
                     <div id="invoiceStatusChart" style="min-height: 280px;"></div>
@@ -225,7 +266,6 @@
             </div>
         </div>
 
-        <!-- Tabel Tagihan Belum Bayar -->
         <div class="col-xl-8 col-lg-7">
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -285,9 +325,8 @@
         </div>
     </div>
 
-    <!-- Pembayaran Terbaru + Kontrak Akan Habis -->
     <div class="row g-3 mb-4">
-        <!-- Pembayaran Terbaru -->
+        
         <div class="col-xl-6 col-lg-6">
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -340,7 +379,6 @@
             </div>
         </div>
 
-        <!-- Kontrak Akan Habis -->
         <div class="col-xl-6 col-lg-6">
             <div class="card h-100">
                 <div class="card-header d-flex justify-content-between align-items-center">
@@ -391,7 +429,7 @@
 {% block page_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    // === Materialize-style Color Palette ===
+    
     var isDark = document.documentElement.classList.contains('dark-style') ||
                  document.body.classList.contains('dark-style') ||
                  window.getComputedStyle(document.body).backgroundColor.includes('rgb(35') ||
@@ -405,16 +443,33 @@ document.addEventListener('DOMContentLoaded', function() {
     var labelColor = isDark ? 'rgba(255,255,255,0.6)' : '#6e6b7b';
     var gridColor = isDark ? 'rgba(255,255,255,0.1)' : '#ebe9f1';
 
-    // === 1. Pemasukan & Pengeluaran — Dynamic Chart ===
     var chartType = '{{ chart_type|default:"area" }}';
+    var revenueSeries = [{
+        name: 'Pemasukan',
+        data: {{ chart_pemasukan|safe }}
+    }, {
+        name: 'Pengeluaran',
+        data: {{ chart_pengeluaran|safe }}
+    }];
+    var revenueLabels = {{ chart_labels|safe }};
+
+    // Approach B: Always render chart, zero-fill when empty
+    if (!revenueLabels || !Array.isArray(revenueLabels) || revenueLabels.length === 0) {
+        revenueLabels = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun'];
+    }
+    if (!revenueSeries || revenueSeries.length === 0) {
+        revenueSeries = [{ name: 'Pemasukan', data: Array(revenueLabels.length).fill(0) }, { name: 'Pengeluaran', data: Array(revenueLabels.length).fill(0) }];
+    } else {
+        revenueSeries = revenueSeries.map(function(s) {
+            if (!s.data || !Array.isArray(s.data) || s.data.length === 0) {
+                s.data = Array(revenueLabels.length).fill(0);
+            }
+            return s;
+        });
+    }
+
     var revenueOptions = {
-        series: [{
-            name: 'Pemasukan',
-            data: {{ chart_pemasukan|safe }}
-        }, {
-            name: 'Pengeluaran',
-            data: {{ chart_pengeluaran|safe }}
-        }],
+        series: revenueSeries,
         chart: {
             type: chartType,
             height: 320,
@@ -450,7 +505,7 @@ document.addEventListener('DOMContentLoaded', function() {
             hover: { size: 7 }
         },
         xaxis: {
-            categories: {{ chart_labels|safe }},
+            categories: revenueLabels,
             axisBorder: { show: false },
             axisTicks: { show: false },
             labels: { style: { fontSize: '12px', colors: labelColor } }
@@ -494,18 +549,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var revenueChart = new ApexCharts(document.querySelector("#revenueChart"), revenueOptions);
     revenueChart.render();
+    window.__revenueChart = revenueChart;
 
-    // === 2. Status Kamar — Donut Chart (Materialize Component Style) ===
+    var roomSeriesRaw = {{ chart_kamar_data|safe }};
+    var roomLabelsRaw = {{ chart_kamar_labels|safe }};
+
+    // Pattern B: Circular chart placeholder when empty
+    var roomTotal = 0;
+    var roomSeriesFinal = roomSeriesRaw;
+    var roomColorsFinal = [successColor, primaryColor, dangerColor];
+    var roomTooltipEnabled = false;
+    if (!roomSeriesRaw || !Array.isArray(roomSeriesRaw) || roomSeriesRaw.length === 0 || roomSeriesRaw.every(function(v){ return v === 0; })) {
+        roomSeriesFinal = [1];
+        roomColorsFinal = ['#e9ecef'];
+        roomTooltipEnabled = false;
+    } else {
+        roomTotal = roomSeriesRaw.reduce(function(a, b) { return a + b; }, 0);
+        roomTooltipEnabled = roomTotal > 0;
+    }
+
     var roomOptions = {
-        series: {{ chart_kamar_data|safe }},
+        series: roomSeriesFinal,
         chart: {
             type: 'donut',
             height: 280,
             fontFamily: '"Inter", sans-serif',
-            parentHeightOffset: 0
+            parentHeightOffset: 0,
+            toolbar: { show: false }
         },
-        labels: {{ chart_kamar_labels|safe }},
-        colors: [successColor, primaryColor, dangerColor],
+        labels: roomLabelsRaw && roomLabelsRaw.length > 0 ? roomLabelsRaw : ['Tidak Ada Data'],
+        colors: roomColorsFinal,
         plotOptions: {
             pie: {
                 endAngle: 130,
@@ -571,18 +644,36 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var roomChart = new ApexCharts(document.querySelector("#roomStatusChart"), roomOptions);
     roomChart.render();
+    window.__roomStatusChart = roomChart;
 
-    // === 3. Status Tagihan — Donut Chart (Materialize Component Style) ===
+    var invoiceSeriesRaw = {{ chart_tagihan_data|safe }};
+    var invoiceLabelsRaw = {{ chart_tagihan_labels|safe }};
+
+    // Pattern B: Circular chart placeholder when empty
+    var invoiceTotal = 0;
+    var invoiceSeriesFinal = invoiceSeriesRaw;
+    var invoiceColorsFinal = [warningColor, infoColor, successColor, dangerColor];
+    var invoiceTooltipEnabled = false;
+    if (!invoiceSeriesRaw || !Array.isArray(invoiceSeriesRaw) || invoiceSeriesRaw.length === 0 || invoiceSeriesRaw.every(function(v){ return v === 0; })) {
+        invoiceSeriesFinal = [1];
+        invoiceColorsFinal = ['#e9ecef'];
+        invoiceTooltipEnabled = false;
+    } else {
+        invoiceTotal = invoiceSeriesRaw.reduce(function(a, b) { return a + b; }, 0);
+        invoiceTooltipEnabled = invoiceTotal > 0;
+    }
+
     var invoiceOptions = {
-        series: {{ chart_tagihan_data|safe }},
+        series: invoiceSeriesFinal,
         chart: {
             type: 'donut',
             height: 280,
             fontFamily: '"Inter", sans-serif',
-            parentHeightOffset: 0
+            parentHeightOffset: 0,
+            toolbar: { show: false }
         },
-        labels: {{ chart_tagihan_labels|safe }},
-        colors: [warningColor, infoColor, successColor, dangerColor],
+        labels: invoiceLabelsRaw && invoiceLabelsRaw.length > 0 ? invoiceLabelsRaw : ['Tidak Ada Data'],
+        colors: invoiceColorsFinal,
         plotOptions: {
             pie: {
                 endAngle: 130,
@@ -648,6 +739,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var invoiceChart = new ApexCharts(document.querySelector("#invoiceStatusChart"), invoiceOptions);
     invoiceChart.render();
+    window.__invoiceStatusChart = invoiceChart;
 });
 </script>
 {% endblock page_js %}

@@ -182,8 +182,8 @@ class TagihanSewa(models.Model):
             metode = MetodePembayaran.objects.filter(kode=self.metode_pembayaran).first()
             if metode:
                 return metode.nama
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
         return self.metode_pembayaran
 
     @property
@@ -246,8 +246,8 @@ class PembayaranSewa(models.Model):
             metode = MetodePembayaran.objects.filter(kode=self.metode_bayar).first()
             if metode:
                 return metode.nama
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning("Error tidak terduga: %s", e)
         # Fallback: tampilkan kode langsung jika MetodePembayaran tidak ditemukan
         return self.metode_bayar
 
@@ -300,6 +300,11 @@ class PembayaranSewa(models.Model):
 
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
+
+import logging
+
+logger = logging.getLogger(__name__)
+
 
 
 @receiver(post_delete, sender=PembayaranSewa)
